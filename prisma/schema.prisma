@@ -1,0 +1,631 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  super_admin
+  facilitator
+  mentor
+  innovator
+  funder_viewer
+}
+
+enum BookingStatus {
+  Confirmed
+  InProgress
+  Completed
+  Cancelled
+  Rescheduled
+  NoShowPendingReview
+}
+
+enum StipendStatus {
+  Eligible
+  NotEligible
+  Pending
+  Override
+}
+
+enum DocumentType {
+  id_document
+  proof_of_address
+  business_plan
+  pitch_deck
+  financial_statement
+  progress_report
+  other
+}
+
+enum IPRecommendation {
+  PatentRequired
+  TrademarkRequired
+  CopyrightApplicable
+  TradeSecret
+  MultipleProtection
+  NoProtectionNeeded
+  ReviewRequired
+}
+
+enum IPStatus {
+  NotAssessed
+  Assessed
+  ApplicationPending
+  Protected
+  Expired
+}
+
+enum IndicatorType {
+  Output
+  Outcome
+  Impact
+  Process
+}
+
+enum MeasurementFrequency {
+  Monthly
+  Quarterly
+  SemiAnnual
+  Annual
+}
+
+enum MilestoneStatus {
+  NotStarted
+  InProgress
+  Completed
+  Delayed
+  AtRisk
+}
+
+enum LogFrameLevel {
+  Input
+  Activity
+  Output
+  Outcome
+  Impact
+}
+
+// ─── Programme (top-level tenant) ────────────────────────────────────────────
+
+model Programme {
+  id                     String   @id @default(cuid())
+  name                   String
+  slug                   String   @unique
+  description            String?
+  logoUrl                String?
+  organizationName       String?
+  participantLabel       String   @default("innovator") // innovator, fellow, founder, grantee
+  timezone               String   @default("Africa/Johannesburg")
+  currency               String   @default("ZAR")
+  currencySymbol         String   @default("R")
+  dateFormat             String   @default("DD/MM/YYYY")
+  idFormat               String?  // "SA_ID" or null
+  defaultStipendAmount   Float    @default(1000)
+
+  // Module flags
+  moduleStipendsEnabled  Boolean  @default(false)
+  moduleIPEnabled        Boolean  @default(false)
+  moduleMandEEnabled     Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  regions            Region[]
+  cohorts            Cohort[]
+  users              User[]
+  dimensions         ReadinessDimension[]
+  assessmentPeriods  AssessmentPeriodDef[]
+  theoryOfChange     TheoryOfChange?
+  logFrameItems      LogFrameItem[]
+  indicators         Indicator[]
+  beneficiaryCounts  BeneficiaryCount[]
+  milestones         MilestoneTracker[]
+}
+
+// ─── Region (replaces District enum) ─────────────────────────────────────────
+
+model Region {
+  id          String   @id @default(cuid())
+  programmeId String
+  name        String
+  code        String?
+  createdAt   DateTime @default(now())
+
+  programme  Programme          @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  cohorts    Cohort[]
+  innovators InnovatorProfile[]
+}
+
+// ─── Readiness Dimensions (TRL/BRL/IRL/MRL per programme) ────────────────────
+
+model ReadinessDimension {
+  id          String   @id @default(cuid())
+  programmeId String
+  key         String   // "trl" | "brl" | "irl" | "mrl"
+  label       String   // "Technology Readiness Level"
+  shortLabel  String   // "TRL"
+  description String?
+  minScore    Int      @default(1)
+  maxScore    Int      @default(9)
+  order       Int      @default(0)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  programme Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  @@unique([programmeId, key])
+}
+
+// ─── Assessment Period Definitions ───────────────────────────────────────────
+
+model AssessmentPeriodDef {
+  id          String   @id @default(cuid())
+  programmeId String
+  key         String   // "baseline" | "month_3" | etc.
+  label       String   // "Baseline" | "Month 3" | etc.
+  order       Int
+  monthOffset Int      // 0, 3, 6, 9, 12
+
+  programme Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  @@unique([programmeId, key])
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String
+  password    String?
+  role        UserRole
+  image       String?
+  programmeId String?   // null = super_admin (sees all)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  programme        Programme?        @relation(fields: [programmeId], references: [id])
+  innovatorProfile InnovatorProfile?
+  mentorProfile    MentorProfile?
+  accounts         Account[]
+  sessions         Session[]
+  notifications    Notification[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Cohorts ─────────────────────────────────────────────────────────────────
+
+model Cohort {
+  id          String    @id @default(cuid())
+  programmeId String
+  regionId    String?
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  programme  Programme          @relation(fields: [programmeId], references: [id])
+  region     Region?            @relation(fields: [regionId], references: [id])
+  innovators InnovatorProfile[]
+  indicators Indicator[]
+  beneficiaryCounts BeneficiaryCount[]
+  milestones MilestoneTracker[]
+}
+
+// ─── Innovator ────────────────────────────────────────────────────────────────
+
+model InnovatorProfile {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  cohortId            String
+  regionId            String?
+  firstName           String
+  lastName            String
+  phone               String?
+  idNumberEncrypted   String?   // AES-256-GCM encrypted
+  businessName        String?
+  businessSector      String?
+  bio                 String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort      Cohort            @relation(fields: [cohortId], references: [id])
+  region      Region?           @relation(fields: [regionId], references: [id])
+  assessments Assessment[]
+  bookings    Booking[]
+  stipends    StipendRecord[]
+  documents   Document[]
+  auditLogs   AuditLog[]
+  milestones  MilestoneTracker[]
+  ipAssessment IPAssessment?
+}
+
+// ─── Mentor ───────────────────────────────────────────────────────────────────
+
+model MentorProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  firstName    String
+  lastName     String
+  phone        String?
+  expertise    String[]
+  bio          String?
+  bookingSlug  String   @unique @default(cuid()) // /book/[bookingSlug]
+  icsToken     String   @unique @default(cuid()) // secret for iCal feed
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  availability    MentorAvailability[]
+  dateOverrides   MentorDateOverride[]
+  blackoutPeriods BlackoutPeriod[]
+  eventTypes      EventType[]
+  bookings        Booking[]
+}
+
+model MentorAvailability {
+  id         String   @id @default(cuid())
+  mentorId   String
+  dayOfWeek  Int      // 0=Sun … 6=Sat
+  startTime  String   // "HH:MM" UTC
+  endTime    String   // "HH:MM" UTC
+  bufferMins Int      @default(15)
+  createdAt  DateTime @default(now())
+
+  mentor MentorProfile @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+}
+
+model MentorDateOverride {
+  id        String   @id @default(cuid())
+  mentorId  String
+  date      DateTime @db.Date
+  available Boolean
+  startTime String?
+  endTime   String?
+  reason    String?
+  createdAt DateTime @default(now())
+
+  mentor MentorProfile @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+}
+
+model BlackoutPeriod {
+  id        String   @id @default(cuid())
+  mentorId  String
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  reason    String?
+  createdAt DateTime @default(now())
+
+  mentor MentorProfile @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+}
+
+// ─── Event Types (Calendly-style session types) ───────────────────────────────
+
+model EventType {
+  id           String   @id @default(cuid())
+  mentorId     String
+  name         String
+  slug         String
+  description  String?
+  durationMins Int      @default(60)
+  bufferBefore Int      @default(0)
+  bufferAfter  Int      @default(15)
+  color        String   @default("#0ea5e9")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  mentor   MentorProfile @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@unique([mentorId, slug])
+}
+
+// ─── Bookings ─────────────────────────────────────────────────────────────────
+
+model Booking {
+  id                    String        @id @default(cuid())
+  innovatorId           String
+  mentorId              String
+  eventTypeId           String?
+  scheduledStart        DateTime      // UTC
+  scheduledEnd          DateTime      // UTC
+  actualStart           DateTime?
+  actualEnd             DateTime?
+  actualDurationMinutes Int?
+  status                BookingStatus @default(Confirmed)
+  meetingLink           String?       // Zoom / Teams / Meet — added manually
+  notes                 String?       @db.Text
+  noShowReason          String?
+  cancelledBy           String?       // "innovator" | "mentor" | "admin"
+  cancelReason          String?       @db.Text
+  rescheduledFromId     String?       // previous booking this replaced
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  innovator         InnovatorProfile  @relation(fields: [innovatorId], references: [id])
+  mentor            MentorProfile     @relation(fields: [mentorId], references: [id])
+  eventType         EventType?        @relation(fields: [eventTypeId], references: [id])
+  rescheduledFrom   Booking?          @relation("RescheduleChain", fields: [rescheduledFromId], references: [id])
+  reschedules       Booking[]         @relation("RescheduleChain")
+  mentorshipLog     MentorshipLog?
+}
+
+// ─── Assessments ──────────────────────────────────────────────────────────────
+
+model Assessment {
+  id                 String    @id @default(cuid())
+  innovatorId        String
+  period             String    // key from AssessmentPeriodDef e.g. "baseline", "month_3"
+  trlScore           Int       // 1-9
+  brlScore           Int       // 1-9
+  irlScore           Int       // 1-9
+  mrlScore           Int?      // 1-9  Market Readiness Level
+  trlJustification   String?   @db.Text
+  brlJustification   String?   @db.Text
+  irlJustification   String?   @db.Text
+  mrlJustification   String?   @db.Text
+  dropJustification  String?   @db.Text
+  assessedBy         String
+  lockedAt           DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  innovator InnovatorProfile @relation(fields: [innovatorId], references: [id])
+
+  @@unique([innovatorId, period])
+}
+
+// ─── Mentorship Log ───────────────────────────────────────────────────────────
+
+model MentorshipLog {
+  id        String   @id @default(cuid())
+  bookingId String   @unique
+  notes     String?  @db.Text
+  outcomes  String?  @db.Text
+  nextSteps String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+}
+
+// ─── Stipends ─────────────────────────────────────────────────────────────────
+
+model StipendRecord {
+  id             String        @id @default(cuid())
+  innovatorId    String
+  periodStart    DateTime      @db.Date
+  periodEnd      DateTime      @db.Date
+  hoursCompleted Float         @default(0)
+  amount         Float         @default(1000)
+  status         StipendStatus @default(Pending)
+  overrideReason String?
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  innovator InnovatorProfile @relation(fields: [innovatorId], references: [id])
+}
+
+// ─── Documents ────────────────────────────────────────────────────────────────
+
+model Document {
+  id          String       @id @default(cuid())
+  innovatorId String
+  type        DocumentType
+  name        String
+  s3Key       String
+  sizeBytes   Int
+  uploadedAt  DateTime     @default(now())
+
+  innovator InnovatorProfile @relation(fields: [innovatorId], references: [id])
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  innovatorId String?
+  actorId     String?
+  action      String
+  entityType  String
+  entityId    String
+  diff        Json?
+  createdAt   DateTime  @default(now())
+
+  innovator InnovatorProfile? @relation(fields: [innovatorId], references: [id])
+}
+
+// ─── IP Protection ───────────────────────────────────────────────────────────
+
+model IPAssessment {
+  id              String           @id @default(cuid())
+  innovatorId     String           @unique
+  answers         Json             // { questionId: answer }
+  recommendations IPRecommendation[] // all applicable types
+  primaryRec      IPRecommendation
+  reasoning       String           @db.Text
+  status          IPStatus         @default(Assessed)
+  advisorNotes    String?          @db.Text
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  completedAt     DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  innovator InnovatorProfile @relation(fields: [innovatorId], references: [id], onDelete: Cascade)
+}
+
+// ─── M&E — Theory of Change ───────────────────────────────────────────────────
+
+model TheoryOfChange {
+  id          String   @id @default(cuid())
+  programmeId String   @unique
+  problem     String?  @db.Text
+  vision      String?  @db.Text
+  inputs      String?  @db.Text
+  activities  String?  @db.Text
+  outputs     String?  @db.Text
+  outcomes    String?  @db.Text
+  impact      String?  @db.Text
+  assumptions String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  programme Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+}
+
+// ─── M&E — Logframe ───────────────────────────────────────────────────────────
+
+model LogFrameItem {
+  id                String        @id @default(cuid())
+  programmeId       String
+  level             LogFrameLevel
+  order             Int           @default(0)
+  description       String        @db.Text
+  indicators        String?       @db.Text  // narrative indicator text
+  verificationMeans String?       @db.Text
+  assumptions       String?       @db.Text
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  programme Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+}
+
+// ─── M&E — Indicators ─────────────────────────────────────────────────────────
+
+model Indicator {
+  id          String               @id @default(cuid())
+  programmeId String
+  cohortId    String?
+  name        String
+  description String?              @db.Text
+  type        IndicatorType
+  unit        String               @default("number")
+  baseline    Float?
+  target      Float
+  frequency   MeasurementFrequency
+  active      Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  programme Programme         @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  cohort    Cohort?           @relation(fields: [cohortId], references: [id])
+  records   IndicatorRecord[]
+}
+
+model IndicatorRecord {
+  id          String   @id @default(cuid())
+  indicatorId String
+  periodLabel String   // "Q1 2024", "Month 3"
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+  value       Float
+  notes       String?  @db.Text
+  recordedBy  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+}
+
+// ─── M&E — Beneficiary Counts ─────────────────────────────────────────────────
+
+model BeneficiaryCount {
+  id          String   @id @default(cuid())
+  programmeId String
+  cohortId    String?
+  periodLabel String
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+  direct      Int      @default(0)
+  indirect    Int      @default(0)
+  female      Int      @default(0)
+  youth       Int      @default(0) // under 35
+  pwd         Int      @default(0) // persons with disabilities
+  notes       String?  @db.Text
+  recordedBy  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  programme Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  cohort    Cohort?   @relation(fields: [cohortId], references: [id])
+}
+
+// ─── M&E — Milestones ─────────────────────────────────────────────────────────
+
+model MilestoneTracker {
+  id            String          @id @default(cuid())
+  programmeId   String
+  cohortId      String?
+  innovatorId   String?
+  title         String
+  description   String?         @db.Text
+  targetDate    DateTime        @db.Date
+  completedDate DateTime?       @db.Date
+  status        MilestoneStatus @default(NotStarted)
+  notes         String?         @db.Text
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  programme  Programme         @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  cohort     Cohort?           @relation(fields: [cohortId], references: [id])
+  innovator  InnovatorProfile? @relation(fields: [innovatorId], references: [id])
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  href      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

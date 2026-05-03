@@ -1,0 +1,151 @@
+import { getSession } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+import { prisma } from '@/lib/prisma'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Users, ClipboardList, Calendar, DollarSign } from 'lucide-react'
+
+export default async function DashboardPage() {
+  const session = await getSession()
+  if (!session) redirect('/login')
+
+  const role = session.user.role
+
+  // Role redirects
+  if (role === 'innovator') redirect('/dashboard/innovator/sessions')
+  if (role === 'funder_viewer') redirect('/dashboard/reports')
+  if (role === 'mentor') redirect('/dashboard/sessions')
+
+  // Stats for admin/facilitator
+  const [totalInnovators, totalAssessments, totalBookings, pendingStipends] = await Promise.all([
+    prisma.innovatorProfile.count(),
+    prisma.assessment.count(),
+    prisma.booking.count({ where: { status: 'Completed' } }),
+    prisma.stipendRecord.count({ where: { status: 'Pending' } }),
+  ])
+
+  const stats = [
+    { label: 'Total Innovators', value: totalInnovators, icon: Users, color: 'text-blue-600 bg-blue-50' },
+    { label: 'Assessments Done', value: totalAssessments, icon: ClipboardList, color: 'text-green-600 bg-green-50' },
+    { label: 'Sessions Completed', value: totalBookings, icon: Calendar, color: 'text-purple-600 bg-purple-50' },
+    { label: 'Stipends Pending', value: pendingStipends, icon: DollarSign, color: 'text-orange-600 bg-orange-50' },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-muted-foreground mt-1">
+          Welcome back, {session.user.name}. Here&apos;s a snapshot of the programme.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => (
+          <Card key={stat.label}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
+              <div className={`p-2 rounded-lg ${stat.color}`}>
+                <stat.icon className="h-4 w-4" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{stat.value}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <RecentActivity />
+        <ProgrammeProgress />
+      </div>
+    </div>
+  )
+}
+
+async function RecentActivity() {
+  const recentBookings = await prisma.booking.findMany({
+    take: 5,
+    orderBy: { updatedAt: 'desc' },
+    include: {
+      innovator: { select: { firstName: true, lastName: true } },
+      mentor: { select: { firstName: true, lastName: true } },
+    },
+  })
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Recent Sessions</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {recentBookings.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No recent sessions.</p>
+        ) : (
+          <div className="space-y-3">
+            {recentBookings.map((b) => (
+              <div key={b.id} className="flex items-center justify-between text-sm">
+                <div>
+                  <span className="font-medium">
+                    {b.innovator.firstName} {b.innovator.lastName}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {' '}
+                    &rarr; {b.mentor.firstName} {b.mentor.lastName}
+                  </span>
+                </div>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    b.status === 'Completed'
+                      ? 'bg-green-100 text-green-700'
+                      : b.status === 'Confirmed'
+                      ? 'bg-blue-100 text-blue-700'
+                      : b.status === 'Cancelled'
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-yellow-100 text-yellow-700'
+                  }`}
+                >
+                  {b.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+async function ProgrammeProgress() {
+  const cohorts = await prisma.cohort.findMany({
+    include: {
+      region: { select: { name: true } },
+      _count: { select: { innovators: true } },
+    },
+  })
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Active Cohorts</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {cohorts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No cohorts yet.</p>
+        ) : (
+          <div className="space-y-4">
+            {cohorts.map((c) => (
+              <div key={c.id}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="font-medium">{c.name}</span>
+                  <span className="text-muted-foreground">{c._count.innovators} innovators</span>
+                </div>
+                {c.region && <p className="text-xs text-muted-foreground">{c.region.name}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
