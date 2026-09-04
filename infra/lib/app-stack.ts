@@ -187,7 +187,7 @@ export class AppStack extends Stack {
      * ------------------------------------------------------------------ */
     const eip = new ec2.CfnEIP(this, 'AppEip', {
       domain: 'vpc',
-      tags: [{ key: 'Name', value: 'innovalanga-hub' }],
+      tags: [{ key: 'Name', value: `innovalanga-hub-${props.environment}` }],
     })
     new ec2.CfnEIPAssociation(this, 'AppEipAssociation', {
       allocationId: eip.attrAllocationId,

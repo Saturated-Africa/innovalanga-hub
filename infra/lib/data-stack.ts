@@ -162,6 +162,11 @@ export class DataStack extends Stack {
         vpc: props.vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
         securityGroups: [securityGroup],
+        // Non-default port. The instance is already in an isolated subnet
+        // reachable only from the application security group, so this is
+        // defence in depth rather than the primary control. The port is
+        // carried in the generated connection secret, so nothing hardcodes it.
+        port: 5433,
         allocatedStorage: 20,
         storageType: rds.StorageType.GP3,
         storageEncrypted: true,
@@ -175,7 +180,7 @@ export class DataStack extends Stack {
         removalPolicy: retention,
         publiclyAccessible: false,
         credentials: rds.Credentials.fromGeneratedSecret('innovalanga', {
-          secretName: 'innovalanga/database',
+          secretName: `innovalanga/${props.environment}/database`,
         }),
         // Minor version patches applied in a defined window rather than at
         // random. SAST is UTC+2, so this is early Sunday morning locally.

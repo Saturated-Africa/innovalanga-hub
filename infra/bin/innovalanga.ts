@@ -69,7 +69,7 @@ const bedrockModelArnPattern =
 /* -------------------------------------------------------------------------- *
  * Stacks
  * -------------------------------------------------------------------------- */
-const network = new NetworkStack(app, stackName('Network'), { env })
+const network = new NetworkStack(app, stackName('Network'), { env, environment })
 
 const data = new DataStack(app, stackName('Data'), {
   env,
@@ -180,6 +180,14 @@ if (!isProd) {
       id: 'AwsSolutions-EC29',
       reason:
         'Termination protection is deliberately off in a sandbox. It is enabled in production, where the containerised database lives on this volume. A sandbox that cannot be destroyed bills forever, which is the larger risk in a test environment.',
+    },
+  ])
+
+  NagSuppressions.addStackSuppressions(data, [
+    {
+      id: 'AwsSolutions-RDS10',
+      reason:
+        'Deletion protection is deliberately off in a sandbox so the environment can be torn down. It is enabled in production.',
     },
   ])
 }

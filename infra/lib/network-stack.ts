@@ -19,14 +19,20 @@ import type { Construct } from 'constructs'
  * instance is public. If the instance is ever moved to a private subnet, three
  * interface endpoints become mandatory and add roughly 21 USD per month.
  */
+export interface NetworkStackProps extends StackProps {
+  environment: 'sandbox' | 'production'
+}
+
 export class NetworkStack extends Stack {
   public readonly vpc: ec2.Vpc
 
-  constructor(scope: Construct, id: string, props: StackProps) {
+  constructor(scope: Construct, id: string, props: NetworkStackProps) {
     super(scope, id, props)
 
     this.vpc = new ec2.Vpc(this, 'Vpc', {
-      vpcName: 'innovalanga-vpc',
+      // Namespaced so the two environments are tellable apart in the console
+      // when they sit in the same account.
+      vpcName: `innovalanga-vpc-${props.environment}`,
       // Two AZs is the minimum for an RDS subnet group, so the isolated tier is
       // ready for the managed database switch without a VPC change.
       maxAzs: 2,
