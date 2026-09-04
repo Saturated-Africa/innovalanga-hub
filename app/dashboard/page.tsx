@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Users, ClipboardList, Calendar, DollarSign } from 'lucide-react'
 import { BookingStatusBadge } from '@/components/shared/BookingStatusBadge'
+import { resolveProgrammeId } from '@/lib/scope'
 
 export default async function DashboardPage() {
   const session = await getSession()
@@ -16,12 +17,18 @@ export default async function DashboardPage() {
   if (role === 'funder_viewer') redirect('/dashboard/reports')
   if (role === 'mentor') redirect('/dashboard/sessions')
 
+  // Scope every figure to the caller's programme. These counts were previously
+  // database-wide, so a facilitator saw other funders' totals on their homepage.
+  const programmeId = await resolveProgrammeId(session)
+  if (!programmeId) redirect('/login')
+  const innovatorScope = { cohort: { programmeId } }
+
   // Stats for admin/facilitator
   const [totalInnovators, totalAssessments, totalBookings, pendingStipends] = await Promise.all([
-    prisma.innovatorProfile.count(),
-    prisma.assessment.count(),
-    prisma.booking.count({ where: { status: 'Completed' } }),
-    prisma.stipendRecord.count({ where: { status: 'Pending' } }),
+    prisma.innovatorProfile.count({ where: innovatorScope }),
+    prisma.assessment.count({ where: { innovator: innovatorScope } }),
+    prisma.booking.count({ where: { status: 'Completed', innovator: innovatorScope } }),
+    prisma.stipendRecord.count({ where: { status: 'Pending', innovator: innovatorScope } }),
   ])
 
   const stats = [
@@ -57,15 +64,16 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <RecentActivity />
-        <ProgrammeProgress />
+        <RecentActivity programmeId={programmeId} />
+        <ProgrammeProgress programmeId={programmeId} />
       </div>
     </div>
   )
 }
 
-async function RecentActivity() {
+async function RecentActivity({ programmeId }: { programmeId: string }) {
   const recentBookings = await prisma.booking.findMany({
+    where: { innovator: { cohort: { programmeId } } },
     take: 5,
     orderBy: { updatedAt: 'desc' },
     include: {
@@ -105,8 +113,9 @@ async function RecentActivity() {
   )
 }
 
-async function ProgrammeProgress() {
+async function ProgrammeProgress({ programmeId }: { programmeId: string }) {
   const cohorts = await prisma.cohort.findMany({
+    where: { programmeId },
     include: {
       region: { select: { name: true } },
       _count: { select: { innovators: true } },

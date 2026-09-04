@@ -38,7 +38,7 @@ export default function TheoryOfChangePage() {
       const { programmeId: pid } = await meRes.json()
       setProgrammeId(pid)
 
-      const tocRes = await fetch(`/api/mande/toc?programmeId=${pid}`)
+      const tocRes = await fetch('/api/mande/toc')
       if (tocRes.ok) {
         const toc = await tocRes.json()
         if (toc) setData(toc)

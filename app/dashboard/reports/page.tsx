@@ -9,11 +9,18 @@ import { CohortProgressChart } from './CohortProgressChart'
 import { Download } from 'lucide-react'
 import { BOOKING_STATUS, statusMeta } from '@/lib/status-colors'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { resolveProgrammeId } from '@/lib/scope'
 
 export default async function ReportsPage() {
   const session = await getSession()
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator', 'funder_viewer'].includes(session.user.role)) redirect('/dashboard')
+
+  // Every count below used to be programme-wide across the whole database, so
+  // a facilitator on one programme saw another funder's totals.
+  const programmeId = await resolveProgrammeId(session)
+  if (!programmeId) redirect('/dashboard')
+  const innovatorScope = { cohort: { programmeId } }
 
   const [
     totalInnovators,
@@ -24,14 +31,19 @@ export default async function ReportsPage() {
     assessmentsByPeriod,
     sessionsByStatus,
   ] = await Promise.all([
-    prisma.innovatorProfile.count(),
-    prisma.assessment.count(),
-    prisma.booking.count({ where: { status: 'Completed' } }),
+    prisma.innovatorProfile.count({ where: innovatorScope }),
+    prisma.assessment.count({ where: { innovator: innovatorScope } }),
+    prisma.booking.count({ where: { status: 'Completed', innovator: innovatorScope } }),
     prisma.stipendRecord.aggregate({
-      where: { status: { in: ['Eligible', 'Override'] }, paidAt: { not: null } },
+      where: {
+        status: { in: ['Eligible', 'Override'] },
+        paidAt: { not: null },
+        innovator: innovatorScope,
+      },
       _sum: { amount: true },
     }),
     prisma.cohort.findMany({
+      where: { programmeId },
       include: {
         region: { select: { name: true } },
         _count: { select: { innovators: true } },
@@ -40,8 +52,16 @@ export default async function ReportsPage() {
         },
       },
     }),
-    prisma.assessment.groupBy({ by: ['period'], _count: { _all: true } }),
-    prisma.booking.groupBy({ by: ['status'], _count: { _all: true } }),
+    prisma.assessment.groupBy({
+      by: ['period'],
+      where: { innovator: innovatorScope },
+      _count: { _all: true },
+    }),
+    prisma.booking.groupBy({
+      by: ['status'],
+      where: { innovator: innovatorScope },
+      _count: { _all: true },
+    }),
   ])
 
   const PERIOD_ORDER = ['baseline', 'month_3', 'month_6', 'month_9', 'final']

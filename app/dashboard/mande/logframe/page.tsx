@@ -71,7 +71,7 @@ export default function LogframePage() {
 
   async function fetchItems(pid: string) {
     setLoading(true)
-    const res = await fetch(`/api/mande/logframe?programmeId=${pid}`)
+    const res = await fetch('/api/mande/logframe')
     if (res.ok) setItems(await res.json())
     setLoading(false)
   }

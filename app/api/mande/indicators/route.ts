@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { resolveProgrammeId, assertProgrammeInScope } from '@/lib/scope'
 
 const IndicatorSchema = z.object({
   programmeId: z.string().min(1),
@@ -23,9 +24,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { searchParams } = new URL(req.url)
-  const programmeId = searchParams.get('programmeId')
-  if (!programmeId) return NextResponse.json({ error: 'programmeId required' }, { status: 400 })
+  // Programme comes from the session, never from the query string. Trusting
+  // the parameter here let any authenticated facilitator or funder read another
+  // programme's data by editing the URL.
+  const programmeId = await resolveProgrammeId(session)
+  if (!programmeId) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
 
   const indicators = await prisma.indicator.findMany({
     where: { programmeId },
@@ -50,6 +53,13 @@ export async function POST(req: Request) {
   const parsed = IndicatorSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const indicator = await prisma.indicator.create({ data: parsed.data })
+  // The client supplies programmeId in the body; validate it against the
+  // session rather than trusting it, otherwise this is a cross-programme write.
+  const programmeId = await assertProgrammeInScope(session, parsed.data.programmeId)
+  if (!programmeId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const indicator = await prisma.indicator.create({
+    data: { ...parsed.data, programmeId },
+  })
   return NextResponse.json(indicator, { status: 201 })
 }

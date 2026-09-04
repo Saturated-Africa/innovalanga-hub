@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type Anthropic from '@anthropic-ai/sdk'
 import { getSession } from '@/lib/auth'
-import { getScopedContext } from '@/lib/ai/scope'
+import { getScopedContext } from '@/lib/scope'
 import { toolsForContext, runTool } from '@/lib/ai/tools'
 import { buildSystemPrompt } from '@/lib/ai/prompts'
 import { getAnthropic, ASSISTANT_MODEL, ASSISTANT_MAX_TOKENS } from '@/lib/ai/client'

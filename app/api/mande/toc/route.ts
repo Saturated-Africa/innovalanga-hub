@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { resolveProgrammeId, assertProgrammeInScope } from '@/lib/scope'
 
 const ToCSchema = z.object({
   programmeId: z.string().min(1),
@@ -22,9 +23,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { searchParams } = new URL(req.url)
-  const programmeId = searchParams.get('programmeId')
-  if (!programmeId) return NextResponse.json({ error: 'programmeId required' }, { status: 400 })
+  // Programme comes from the session, never from the query string. Trusting
+  // the parameter here let any authenticated facilitator or funder read another
+  // programme's data by editing the URL.
+  const programmeId = await resolveProgrammeId(session)
+  if (!programmeId) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
 
   const toc = await prisma.theoryOfChange.findUnique({ where: { programmeId } })
   return NextResponse.json(toc ?? null)
@@ -41,7 +44,10 @@ export async function PUT(req: Request) {
   const parsed = ToCSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const { programmeId, ...data } = parsed.data
+  const { programmeId: requestedProgrammeId, ...data } = parsed.data
+  // Validate the supplied programme against the session before upserting.
+  const programmeId = await assertProgrammeInScope(session, requestedProgrammeId)
+  if (!programmeId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const toc = await prisma.theoryOfChange.upsert({
     where: { programmeId },

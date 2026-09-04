@@ -97,7 +97,7 @@ export default function IndicatorsPage() {
 
   async function fetchIndicators(pid: string) {
     setLoading(true)
-    const res = await fetch(`/api/mande/indicators?programmeId=${pid}`)
+    const res = await fetch('/api/mande/indicators')
     if (res.ok) setIndicators(await res.json())
     setLoading(false)
   }

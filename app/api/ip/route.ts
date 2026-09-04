@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { resolveProgrammeId } from '@/lib/scope'
 
 /**
  * GET /api/ip?programmeId=xxx
@@ -13,23 +14,18 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { searchParams } = new URL(req.url)
-  const programmeId = searchParams.get('programmeId')
+  // Programme comes from the session, never the query string.
+  const pid = await resolveProgrammeId(session)
 
-  // Resolve programme
-  let pid = programmeId
-  if (!pid) {
-    pid = session.user.programmeId ?? null
-    if (!pid) {
-      const first = await prisma.programme.findFirst({ orderBy: { createdAt: 'asc' }, select: { id: true } })
-      pid = first?.id ?? null
-    }
-  }
+  // Fail closed. The previous form was `programmeId: pid ?? undefined`, and
+  // Prisma DROPS an undefined filter — so a null programme returned every
+  // programme's IP assessments rather than none.
+  if (!pid) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
 
   const assessments = await prisma.iPAssessment.findMany({
     where: {
       innovator: {
-        cohort: { programmeId: pid ?? undefined },
+        cohort: { programmeId: pid },
       },
     },
     include: {
@@ -46,6 +42,22 @@ export async function GET(req: Request) {
     },
     orderBy: { completedAt: 'desc' },
   })
+
+  // Funders get the IP picture without the people. CLAUDE.md states this role
+  // sees no PII; the code did not honour that.
+  if (session.user.role === 'funder_viewer') {
+    return NextResponse.json(
+      assessments.map((a) => ({
+        id: a.id,
+        primaryRec: a.primaryRec,
+        recommendations: a.recommendations,
+        status: a.status,
+        completedAt: a.completedAt,
+        cohort: a.innovator.cohort?.name ?? null,
+        region: a.innovator.region?.name ?? null,
+      }))
+    )
+  }
 
   return NextResponse.json(assessments)
 }

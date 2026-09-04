@@ -77,7 +77,7 @@ export default function MilestonesPage() {
 
   async function fetchMilestones(pid: string) {
     setLoading(true)
-    const res = await fetch(`/api/mande/milestones?programmeId=${pid}`)
+    const res = await fetch('/api/mande/milestones')
     if (res.ok) setMilestones(await res.json())
     setLoading(false)
   }

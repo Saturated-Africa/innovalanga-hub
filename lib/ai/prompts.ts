@@ -1,4 +1,4 @@
-import type { ScopedContext } from '@/lib/ai/scope'
+import type { ScopedContext } from '@/lib/scope'
 import { ROLE_LABELS } from '@/lib/auth'
 
 /**

@@ -67,7 +67,7 @@ export default function BeneficiariesPage() {
 
   async function fetchCounts(pid: string) {
     setLoading(true)
-    const res = await fetch(`/api/mande/beneficiaries?programmeId=${pid}`)
+    const res = await fetch('/api/mande/beneficiaries')
     if (res.ok) setCounts(await res.json())
     setLoading(false)
   }

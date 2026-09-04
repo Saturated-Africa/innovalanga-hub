@@ -8,13 +8,18 @@ import { DataTable } from '@/components/shared/DataTable'
 import { formatDate } from '@/lib/utils'
 import { UserPlus } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { resolveProgrammeId } from '@/lib/scope'
 
 export default async function InnovatorsPage() {
   const session = await getSession()
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')
 
+  const programmeId = await resolveProgrammeId(session)
+  if (!programmeId) redirect('/dashboard')
+
   const innovators = await prisma.innovatorProfile.findMany({
+    where: { cohort: { programmeId } },
     include: {
       user: { select: { email: true } },
       cohort: { select: { name: true } },

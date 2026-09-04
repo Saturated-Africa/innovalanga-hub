@@ -14,7 +14,9 @@
     "db:studio": "npx prisma studio",
     "db:generate": "npx prisma generate",
     "db:migrate-event-colors": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/migrate-event-colors.ts",
-    "test:scope": "node --test --experimental-strip-types lib/ai/scope.test.ts"
+    "test:scope": "node --test --experimental-strip-types lib/scope.test.ts",
+    "test:tenancy": "node --test --experimental-strip-types lib/tenancy.test.ts",
+    "test": "node --test --experimental-strip-types lib/*.test.ts"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

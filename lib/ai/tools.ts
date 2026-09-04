@@ -7,7 +7,7 @@ import {
   innovatorWhere,
   programmeWhere,
   type ScopedContext,
-} from '@/lib/ai/scope'
+} from '@/lib/scope'
 import {
   formatDate,
   getTRLLabel,
