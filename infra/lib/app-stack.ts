@@ -99,12 +99,22 @@ export class AppStack extends Stack {
     props.appSecret.grantRead(role)
     this.repository.grantPull(role)
 
-    // Bedrock. Scoped to the specific inference profile rather than a wildcard,
-    // so a compromised instance cannot invoke arbitrary models.
+    // Bedrock.
+    //
+    // Invoking through a GLOBAL inference profile authorises against TWO
+    // resources, not one: the inference profile itself, and the underlying
+    // foundation model it routes to. Granting only the profile ARN produces an
+    // AccessDenied naming the foundation-model ARN, which reads like an
+    // account-level problem and is not.
+    //
+    // Foundation model ARNs carry no account id, hence the empty field.
     role.addToPolicy(
       new iam.PolicyStatement({
         actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
-        resources: [props.bedrockModelArnPattern],
+        resources: [
+          props.bedrockModelArnPattern,
+          'arn:aws:bedrock:*::foundation-model/anthropic.*',
+        ],
       })
     )
 
