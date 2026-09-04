@@ -58,7 +58,7 @@ export function NotificationBell() {
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
@@ -79,7 +79,7 @@ export function NotificationBell() {
               const content = (
                 <div
                   className={`px-4 py-3 border-b last:border-0 hover:bg-accent transition-colors ${
-                    !n.read ? 'bg-blue-50/60' : ''
+                    !n.read ? 'bg-info/[0.07]' : ''
                   }`}
                 >
                   <p className="text-sm font-medium leading-tight">{n.title}</p>

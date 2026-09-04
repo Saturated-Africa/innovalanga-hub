@@ -166,7 +166,7 @@ export function AvailabilityExceptions({
               {overrides.map((o) => (
                 <div key={o.id} className="flex items-center justify-between px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs border-red-200 text-red-700 bg-red-50">Unavailable</Badge>
+                    <Badge variant="outline" className="text-xs border-destructive/25 text-destructive bg-destructive/10">Unavailable</Badge>
                     <span className="text-sm font-medium">{formatDate(o.date)}</span>
                     {o.reason && <span className="text-xs text-muted-foreground">{o.reason}</span>}
                   </div>
@@ -240,7 +240,7 @@ export function AvailabilityExceptions({
               {blackouts.map((b) => (
                 <div key={b.id} className="flex items-center justify-between px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs border-orange-200 text-orange-700 bg-orange-50">Blackout</Badge>
+                    <Badge variant="outline" className="text-xs border-warning/25 text-warning bg-warning/10">Blackout</Badge>
                     <span className="text-sm font-medium">
                       {formatDate(b.startDate)} – {formatDate(b.endDate)}
                     </span>

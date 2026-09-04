@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Users, ClipboardList, Calendar, DollarSign } from 'lucide-react'
+import { BookingStatusBadge } from '@/components/shared/BookingStatusBadge'
 
 export default async function DashboardPage() {
   const session = await getSession()
@@ -24,16 +25,16 @@ export default async function DashboardPage() {
   ])
 
   const stats = [
-    { label: 'Total Innovators', value: totalInnovators, icon: Users, color: 'text-blue-600 bg-blue-50' },
-    { label: 'Assessments Done', value: totalAssessments, icon: ClipboardList, color: 'text-green-600 bg-green-50' },
+    { label: 'Total Innovators', value: totalInnovators, icon: Users, color: 'text-info bg-info/10' },
+    { label: 'Assessments Done', value: totalAssessments, icon: ClipboardList, color: 'text-success bg-success/10' },
     { label: 'Sessions Completed', value: totalBookings, icon: Calendar, color: 'text-purple-600 bg-purple-50' },
-    { label: 'Stipends Pending', value: pendingStipends, icon: DollarSign, color: 'text-orange-600 bg-orange-50' },
+    { label: 'Stipends Pending', value: pendingStipends, icon: DollarSign, color: 'text-warning bg-warning/10' },
   ]
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground mt-1">
           Welcome back, {session.user.name}. Here&apos;s a snapshot of the programme.
         </p>
@@ -94,19 +95,7 @@ async function RecentActivity() {
                     &rarr; {b.mentor.firstName} {b.mentor.lastName}
                   </span>
                 </div>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    b.status === 'Completed'
-                      ? 'bg-green-100 text-green-700'
-                      : b.status === 'Confirmed'
-                      ? 'bg-blue-100 text-blue-700'
-                      : b.status === 'Cancelled'
-                      ? 'bg-red-100 text-red-700'
-                      : 'bg-yellow-100 text-yellow-700'
-                  }`}
-                >
-                  {b.status}
-                </span>
+                <BookingStatusBadge status={b.status} />
               </div>
             ))}
           </div>

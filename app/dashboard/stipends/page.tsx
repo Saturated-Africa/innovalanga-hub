@@ -5,6 +5,7 @@ import { DataTable } from '@/components/shared/DataTable'
 import { StipendStatusBadge } from '@/components/shared/StipendStatusBadge'
 import { RecalculateStipendButton } from '@/components/dashboard/RecalculateStipendButton'
 import { formatDate, formatCurrency } from '@/lib/utils'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default async function StipendsPage() {
   const session = await getSession()
@@ -40,22 +41,19 @@ export default async function StipendsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Stipends</h1>
-        <p className="text-muted-foreground mt-1">Monthly register of innovator stipend eligibility</p>
-      </div>
+      <PageHeader title="Stipends" description="Monthly register of innovator stipend eligibility" />
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Eligible Records</p>
-          <p className="text-3xl font-bold text-green-600">{totalEligible}</p>
+          <p className="text-3xl font-bold text-success">{totalEligible}</p>
         </div>
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Paid Out</p>
           <p className="text-3xl font-bold">{totalPaid}</p>
         </div>
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Total Committed</p>
           <p className="text-3xl font-bold">{formatCurrency(totalAmount)}</p>
         </div>

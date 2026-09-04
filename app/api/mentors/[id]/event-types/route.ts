@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { DEFAULT_EVENT_COLOR } from '@/lib/event-colors'
 
 const schema = z.object({
   name: z.string().min(1).max(80),
@@ -10,7 +11,7 @@ const schema = z.object({
   durationMins: z.number().int().min(15).max(480),
   bufferBefore: z.number().int().min(0).max(60).optional().default(0),
   bufferAfter: z.number().int().min(0).max(60).optional().default(15),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().default('#0ea5e9'),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().default(DEFAULT_EVENT_COLOR),
   active: z.boolean().optional().default(true),
 })
 

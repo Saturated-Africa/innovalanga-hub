@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { ShieldCheck, ShieldAlert, ShieldOff } from 'lucide-react'
 import { REC_CONFIG, STATUS_CONFIG } from '@/lib/ip-engine'
 import { IPAdvisorPanel } from './IPAdvisorPanel'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default async function IPDashboardPage() {
   const session = await getSession()
@@ -65,10 +66,7 @@ export default async function IPDashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">IP Protection</h1>
-          <p className="text-muted-foreground mt-1">Intellectual property assessment status across all innovators</p>
-        </div>
+      <PageHeader title="IP Protection" description="Intellectual property assessment status across all innovators" />
       </div>
 
       {/* Summary KPIs */}
@@ -76,21 +74,21 @@ export default async function IPDashboardPage() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground">Assessed</p>
-            <p className="text-3xl font-bold text-green-600 mt-1">{assessments.length}</p>
+            <p className="text-3xl font-bold text-success mt-1">{assessments.length}</p>
             <p className="text-xs text-muted-foreground">of {allInnovators.length} innovators</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground">Not Yet Assessed</p>
-            <p className="text-3xl font-bold text-orange-500 mt-1">{unassessed.length}</p>
+            <p className="text-3xl font-bold text-warning mt-1">{unassessed.length}</p>
             <p className="text-xs text-muted-foreground">innovators pending</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground">Protected</p>
-            <p className="text-3xl font-bold text-blue-600 mt-1">{statusCounts['Protected'] ?? 0}</p>
+            <p className="text-3xl font-bold text-info mt-1">{statusCounts['Protected'] ?? 0}</p>
             <p className="text-xs text-muted-foreground">IP applications approved</p>
           </CardContent>
         </Card>
@@ -105,7 +103,7 @@ export default async function IPDashboardPage() {
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {Object.entries(recCounts).map(([rec, count]) => (
-                <div key={rec} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${REC_CONFIG[rec]?.color ?? 'bg-gray-100'}`}>
+                <div key={rec} className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-1.5">
                   <span className="text-sm font-medium">{REC_CONFIG[rec]?.label ?? rec}</span>
                   <span className="text-sm font-bold">({count})</span>
                 </div>
@@ -157,7 +155,7 @@ export default async function IPDashboardPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <ShieldOff className="h-4 w-4 text-orange-500" /> Not Yet Assessed ({unassessed.length})
+              <ShieldOff className="h-4 w-4 text-warning" /> Not Yet Assessed ({unassessed.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -168,7 +166,7 @@ export default async function IPDashboardPage() {
                     <p className="text-sm font-medium">{i.firstName} {i.lastName}</p>
                     <p className="text-xs text-muted-foreground">{i.businessName ?? i.cohort.name}</p>
                   </div>
-                  <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50">Pending</Badge>
+                  <Badge variant="outline" className="text-warning border-warning/25 bg-warning/10">Pending</Badge>
                 </div>
               ))}
             </div>

@@ -68,7 +68,7 @@ export default async function MentorshipPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="outline" className="border-green-300 text-green-700 bg-green-50">
+                      <Badge variant="outline" className="border-success/30 text-success bg-success/10">
                         Completed
                       </Badge>
                       {b.actualDurationMinutes && (

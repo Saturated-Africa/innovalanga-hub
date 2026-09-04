@@ -2,50 +2,120 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Innovalanga Hub design tokens.
+
+  Brand source: Innova Logo Exports/SVGs/Colour Logo.svg
+    volt   #D8F100   the mark
+    black  #000000   the wordmark
+
+  CRITICAL: volt has a relative luminance of 0.775 — it is optically a LIGHT
+  colour. White on volt is 1.27:1 (illegible); ink on volt is 13.17:1. So
+  --primary-foreground is ink, never white, and volt is never used as a text
+  or link colour on a light surface. It is a fill, chip, indicator or focus
+  ring — always with ink on top.
+*/
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Brand constants — reference these via the `brand` Tailwind scale. */
+    --brand-volt: 66.2 100% 47.3%; /* #D8F100 */
+    --brand-volt-dim: 66.4 100% 42.5%; /* #C2D900 — hover/pressed */
+    --brand-volt-deep: 66.8 100% 24.3%; /* #6E7C00 — volt legible on light */
+    --brand-ink: 330 3.3% 11.8%; /* #1F1D1E */
+    --brand-charcoal: 330 2.3% 16.9%; /* #2C2A2B */
+    --brand-grey: 320 2.7% 22.2%; /* #3A3739 */
+
+    /* Surfaces */
+    --background: 60 11.1% 96.5%;
+    --foreground: 330 3.3% 11.8%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 330 3.3% 11.8%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --popover-foreground: 330 3.3% 11.8%;
+
+    /* Volt primary — ink foreground is mandatory, see note above. */
+    --primary: 66.2 100% 47.3%;
+    --primary-foreground: 330 3.3% 11.8%;
+
+    --secondary: 45 11.8% 93.3%;
+    --secondary-foreground: 330 3.3% 11.8%;
+    --muted: 45 11.8% 93.3%;
+    --muted-foreground: 24 2.4% 41%;
+    --accent: 45 11.8% 93.3%;
+    --accent-foreground: 330 3.3% 11.8%;
+
+    --destructive: 5.6 63.4% 46.1%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Semantic status — consumed by the badge variants. */
+    --success: 132 38.8% 40.4%;
+    --success-foreground: 0 0% 100%;
+    --warning: 41.2 100% 39.4%;
+    --warning-foreground: 0 0% 100%;
+    --info: 200 50.5% 37.3%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 48 8.5% 88.4%;
+    --input: 48 8.5% 88.4%;
+    --ring: 66.8 100% 24.3%; /* volt-deep: a volt focus ring must be legible on white */
+
+    /*
+      Chart ramp. Every value clears 4.3:1 against the canvas and takes white
+      labels at >=4.6:1, so each works as a stroke and as a filled mark.
+      1 = TRL (volt-derived), 2 = BRL, 3 = IRL, 4 = MRL, 5 = neutral.
+    */
+    --chart-1: 66.8 100% 24.3%;
+    --chart-2: 192.9 82.3% 31%;
+    --chart-3: 15 79.1% 33.7%;
+    --chart-4: 263.4 69.3% 42.2%;
+    --chart-5: 320 2.7% 22.2%;
+    --chart-grid: 48 8.5% 88.4%;
+
+    /* Tight, deliberate corner — the 8px default reads as template. */
+    --radius: 0.25rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --background: 300 2.6% 7.6%;
+    --foreground: 60 11.1% 96.5%;
+    --card: 330 3.3% 11.8%;
+    --card-foreground: 60 11.1% 96.5%;
+    --popover: 330 3.3% 11.8%;
+    --popover-foreground: 60 11.1% 96.5%;
+
+    /* Volt reads as a light colour, so it stays the primary and keeps ink on top. */
+    --primary: 66.2 100% 47.3%;
+    --primary-foreground: 330 3.3% 11.8%;
+
+    --secondary: 330 2.3% 16.9%;
+    --secondary-foreground: 60 11.1% 96.5%;
+    --muted: 330 2.3% 16.9%;
+    --muted-foreground: 30 3.2% 62.7%;
+    --accent: 320 2.7% 22.2%;
+    --accent-foreground: 60 11.1% 96.5%;
+
+    --destructive: 5.6 63.4% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 132 38.8% 52%;
+    --success-foreground: 330 3.3% 11.8%;
+    --warning: 41.2 100% 52%;
+    --warning-foreground: 330 3.3% 11.8%;
+    --info: 200 50.5% 55%;
+    --info-foreground: 330 3.3% 11.8%;
+
+    --border: 320 2.7% 22.2%;
+    --input: 320 2.7% 22.2%;
+    --ring: 66.2 100% 47.3%; /* on dark, full volt is the right ring */
+
+    /* Lifted for legibility against the dark canvas. */
+    --chart-1: 66.2 100% 47.3%;
+    --chart-2: 192.9 70% 55%;
+    --chart-3: 15 79.1% 58%;
+    --chart-4: 263.4 69.3% 68%;
+    --chart-5: 30 3.2% 62.7%;
+    --chart-grid: 320 2.7% 22.2%;
   }
 }
 
@@ -53,7 +123,42 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+    The brand wordmark is set in a heavy geometric grotesque. Headings pick up
+    the tight tracking that gives the identity its density.
+  */
+  h1,
+  h2,
+  h3 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer components {
+  /*
+    The volt indicator bar used for active navigation. Kept here rather than
+    repeated at call sites because the ink-on-volt pairing is a hard rule.
+  */
+  .volt-rule {
+    @apply bg-primary text-primary-foreground;
+  }
+
+  /*
+    Brand link. Volt cannot be a link colour — at luminance 0.775 it is 1.27:1
+    on the canvas — so the accent moves to the underline and the text stays ink.
+  */
+  .link-brand {
+    @apply font-medium text-foreground underline decoration-primary decoration-2 underline-offset-4 transition-colors;
+  }
+
+  .link-brand:hover {
+    @apply decoration-brand-volt-deep;
   }
 }

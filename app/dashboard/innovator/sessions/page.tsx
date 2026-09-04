@@ -7,6 +7,7 @@ import { BookingStatusBadge } from '@/components/shared/BookingStatusBadge'
 import { formatDateTime, formatDuration } from '@/lib/utils'
 import Link from 'next/link'
 import { CalendarPlus } from 'lucide-react'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default async function InnovatorSessionsPage() {
   const session = await getSession()
@@ -42,11 +43,11 @@ export default async function InnovatorSessionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">My Sessions</h1>
-          <p className="text-muted-foreground mt-1">View and manage your mentoring sessions</p>
-        </div>
+      <PageHeader
+        title="My Sessions"
+        description="View and manage your mentoring sessions"
+        actions={
+          <>
         {!hasActiveBooking && (
           <Button asChild>
             <Link href="/dashboard/book">
@@ -55,14 +56,16 @@ export default async function InnovatorSessionsPage() {
             </Link>
           </Button>
         )}
-      </div>
+          </>
+        }
+      />
 
       {upcoming.length > 0 && (
         <div>
           <h2 className="text-base font-semibold mb-3">Upcoming</h2>
           <div className="space-y-3">
             {upcoming.map((b) => (
-              <Card key={b.id} className="border-blue-200 bg-blue-50/50">
+              <Card key={b.id} className="border-info/25 bg-info/[0.07]">
                 <CardContent className="pt-4">
                   <div className="flex justify-between items-start">
                     <div>
@@ -72,7 +75,7 @@ export default async function InnovatorSessionsPage() {
                       </p>
                       <p className="text-sm mt-1">{formatDateTime(b.scheduledStart)}</p>
                       {b.meetingLink && (
-                        <a href={b.meetingLink} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline mt-1 block">
+                        <a href={b.meetingLink} target="_blank" rel="noopener noreferrer" className="link-brand mt-1 block text-sm">
                           Join meeting link
                         </a>
                       )}

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/shared/DataTable'
 import { formatDate } from '@/lib/utils'
 import { UserPlus } from 'lucide-react'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default async function InnovatorsPage() {
   const session = await getSession()
@@ -49,11 +50,11 @@ export default async function InnovatorsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Innovators</h1>
-          <p className="text-muted-foreground mt-1">{innovators.length} registered innovators</p>
-        </div>
+      <PageHeader
+        title="Innovators"
+        description={<>{innovators.length} registered innovators</>}
+        actions={
+          <>
         {session.user.role === 'super_admin' && (
           <Button asChild>
             <Link href="/dashboard/innovators/new">
@@ -62,7 +63,9 @@ export default async function InnovatorsPage() {
             </Link>
           </Button>
         )}
-      </div>
+          </>
+        }
+      />
 
       <DataTable
         data={rows}
@@ -74,7 +77,7 @@ export default async function InnovatorsPage() {
             label: 'Name',
             sortable: true,
             render: (row: Row) => (
-              <Link href={`/dashboard/innovators/${row.id}`} className="font-medium text-primary hover:underline">
+              <Link href={`/dashboard/innovators/${row.id}`} className="link-brand">
                 {row.name}
               </Link>
             ),
@@ -93,21 +96,21 @@ export default async function InnovatorsPage() {
             key: 'latestTRL',
             label: 'TRL',
             render: (row: Row) => (
-              <span className="font-mono font-semibold text-blue-600">{row.latestTRL}</span>
+              <span className="font-mono font-semibold text-chart-1">{row.latestTRL}</span>
             ),
           },
           {
             key: 'latestBRL',
             label: 'BRL',
             render: (row: Row) => (
-              <span className="font-mono font-semibold text-green-600">{row.latestBRL}</span>
+              <span className="font-mono font-semibold text-chart-2">{row.latestBRL}</span>
             ),
           },
           {
             key: 'latestIRL',
             label: 'IRL',
             render: (row: Row) => (
-              <span className="font-mono font-semibold text-purple-600">{row.latestIRL}</span>
+              <span className="font-mono font-semibold text-chart-3">{row.latestIRL}</span>
             ),
           },
           { key: 'sessions', label: 'Sessions' },

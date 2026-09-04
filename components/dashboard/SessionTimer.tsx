@@ -56,7 +56,7 @@ export function SessionTimer({ bookingId, actualStart, scheduledEnd }: SessionTi
   if (done) {
     return (
       <div className="flex flex-col items-end gap-2">
-        <div className="flex items-center gap-1.5 text-green-600 text-sm font-medium">
+        <div className="flex items-center gap-1.5 text-success text-sm font-medium">
           <CheckCircle2 className="h-4 w-4" />
           Session ended
         </div>
@@ -69,10 +69,10 @@ export function SessionTimer({ bookingId, actualStart, scheduledEnd }: SessionTi
 
   return (
     <div className="flex flex-col items-end gap-2">
-      <div className={`flex items-center gap-1.5 text-sm font-mono font-semibold ${overtime ? 'text-red-600' : 'text-green-600'}`}>
+      <div className={`flex items-center gap-1.5 text-sm font-mono font-semibold ${overtime ? 'text-destructive' : 'text-success'}`}>
         <Clock className="h-4 w-4" />
         {formatElapsed(elapsed)}
-        {overtime && <span className="text-xs font-sans font-medium text-red-500 ml-1">overtime</span>}
+        {overtime && <span className="text-xs font-sans font-medium text-destructive ml-1">overtime</span>}
       </div>
       <Button
         size="sm"

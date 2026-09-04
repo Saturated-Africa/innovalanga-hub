@@ -41,11 +41,12 @@ interface AssessmentFormProps {
   assessorName: string
 }
 
-const SCORE_COLORS: Record<string, string> = {
-  TRL: 'blue',
-  BRL: 'green',
-  IRL: 'purple',
-  MRL: 'orange',
+/** Selected-score chip fill per dimension, from the shared readiness palette. */
+const SCORE_FILL: Record<string, string> = {
+  TRL: 'bg-chart-1 text-white',
+  BRL: 'bg-chart-2 text-white',
+  IRL: 'bg-chart-3 text-white',
+  MRL: 'bg-chart-4 text-white',
 }
 
 function ScoreSelector({
@@ -59,15 +60,8 @@ function ScoreSelector({
   onChange: (v: number) => void
   labelFn: (n: number) => string
 }) {
-  const color = SCORE_COLORS[type]
-  const activeClass =
-    color === 'blue'
-      ? 'bg-blue-600 text-white'
-      : color === 'green'
-      ? 'bg-green-600 text-white'
-      : color === 'purple'
-      ? 'bg-purple-600 text-white'
-      : 'bg-orange-500 text-white'
+  // Every chart-ramp colour is dark enough to carry white at >= 4.6:1.
+  const activeClass = SCORE_FILL[type] ?? 'bg-chart-5 text-white'
 
   return (
     <div>

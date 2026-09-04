@@ -16,6 +16,7 @@ import { formatDate, formatDateTime } from '@/lib/utils'
 import Link from 'next/link'
 import { ClipboardList, ArrowLeft, ShieldCheck } from 'lucide-react'
 import { REC_CONFIG, STATUS_CONFIG } from '@/lib/ip-engine'
+import { IP_RECOMMENDATION_VARIANT } from '@/lib/status-colors'
 
 interface Props {
   params: { id: string }
@@ -116,7 +117,7 @@ export default async function InnovatorProfilePage({ params }: Props) {
               <Badge variant="outline" className="text-xs">{innovator.businessSector}</Badge>
             )}
             {innovator.ipAssessment && (
-              <Badge className={`text-xs ${REC_CONFIG[innovator.ipAssessment.primaryRec]?.color ?? 'bg-gray-100'}`}>
+              <Badge variant={IP_RECOMMENDATION_VARIANT[innovator.ipAssessment.primaryRec] ?? 'muted'}>
                 <ShieldCheck className="h-3 w-3 mr-1" />
                 {REC_CONFIG[innovator.ipAssessment.primaryRec]?.label ?? innovator.ipAssessment.primaryRec}
               </Badge>

@@ -23,6 +23,8 @@ import {
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, Plus, Pencil, Trash2 } from 'lucide-react'
+import { LOGFRAME_LEVEL_VARIANT } from '@/lib/status-colors'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 type LogFrameLevel = 'Input' | 'Activity' | 'Output' | 'Outcome' | 'Impact'
 
@@ -37,14 +39,6 @@ interface LogFrameItem {
 }
 
 const LEVELS: LogFrameLevel[] = ['Impact', 'Outcome', 'Output', 'Activity', 'Input']
-
-const LEVEL_COLOR: Record<LogFrameLevel, string> = {
-  Impact: 'bg-purple-100 text-purple-800 border-purple-200',
-  Outcome: 'bg-blue-100 text-blue-800 border-blue-200',
-  Output: 'bg-green-100 text-green-800 border-green-200',
-  Activity: 'bg-orange-100 text-orange-800 border-orange-200',
-  Input: 'bg-gray-100 text-gray-800 border-gray-200',
-}
 
 const EMPTY_FORM = {
   level: 'Output' as LogFrameLevel,
@@ -155,16 +149,18 @@ export default function LogframePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Logframe</h1>
-          <p className="text-muted-foreground mt-1">Logical Framework Matrix — inputs through impact</p>
-        </div>
+      <PageHeader
+        title="Logframe"
+        description="Logical Framework Matrix — inputs through impact"
+        actions={
+          <>
         <Button onClick={openNew}>
           <Plus className="h-4 w-4 mr-2" />
           Add Row
         </Button>
-      </div>
+          </>
+        }
+      />
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -176,9 +172,9 @@ export default function LogframePage() {
             <Card key={level}>
               <CardHeader className="pb-2 pt-4">
                 <CardTitle className="text-sm">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${LEVEL_COLOR[level]}`}>
+                  <Badge variant={LOGFRAME_LEVEL_VARIANT[level] ?? 'muted'}>
                     {level}
-                  </span>
+                  </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">

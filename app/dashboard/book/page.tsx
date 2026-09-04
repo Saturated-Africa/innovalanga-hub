@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Clock, CalendarDays } from 'lucide-react'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default async function BookPage() {
   const session = await getSession()
@@ -29,9 +30,9 @@ export default async function BookPage() {
     return (
       <div className="space-y-4 max-w-lg">
         <h1 className="text-2xl font-bold">Book a Session</h1>
-        <div className="rounded-lg border bg-yellow-50 border-yellow-200 p-4 space-y-1">
-          <p className="text-sm font-medium text-yellow-800">You already have an active booking.</p>
-          <p className="text-sm text-yellow-700">
+        <div className="rounded-lg border bg-warning/10 border-warning/25 p-4 space-y-1">
+          <p className="text-sm font-medium text-warning">You already have an active booking.</p>
+          <p className="text-sm text-warning">
             {activeBooking.eventType?.name ?? 'Session'} with{' '}
             {activeBooking.mentor.firstName} {activeBooking.mentor.lastName}.
             Complete or cancel it before booking again.
@@ -60,10 +61,7 @@ export default async function BookPage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold">Book a Session</h1>
-        <p className="text-muted-foreground mt-1">Choose a mentor to book a 1-on-1 session</p>
-      </div>
+      <PageHeader title="Book a Session" description="Choose a mentor to book a 1-on-1 session" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {mentors.map((m) => (

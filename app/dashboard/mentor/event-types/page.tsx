@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/hooks/use-toast'
 import { Clock, Plus, Pencil, Trash2, Loader2, Check, X } from 'lucide-react'
+import { EVENT_COLORS, DEFAULT_EVENT_COLOR } from '@/lib/event-colors'
 
 interface EventType {
   id: string
@@ -22,9 +23,7 @@ interface EventType {
   active: boolean
 }
 
-const COLORS = [
-  '#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1',
-]
+const COLORS = EVENT_COLORS
 
 function EventTypeForm({
   initial,
@@ -42,7 +41,7 @@ function EventTypeForm({
   const [description, setDescription] = useState(initial?.description ?? '')
   const [durationMins, setDurationMins] = useState(initial?.durationMins ?? 60)
   const [bufferAfter, setBufferAfter] = useState(initial?.bufferAfter ?? 15)
-  const [color, setColor] = useState(initial?.color ?? '#0ea5e9')
+  const [color, setColor] = useState(initial?.color ?? DEFAULT_EVENT_COLOR)
   const [saving, setSaving] = useState(false)
 
   function handleNameChange(v: string) {

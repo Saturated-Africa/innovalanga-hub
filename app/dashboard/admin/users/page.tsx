@@ -9,6 +9,7 @@ import { UserRoleSelect } from './UserRoleSelect'
 import { DeleteUserButton } from './DeleteUserButton'
 import Link from 'next/link'
 import { UserPlus } from 'lucide-react'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default async function AdminUsersPage() {
   const session = await getSession()
@@ -29,28 +30,30 @@ export default async function AdminUsersPage() {
 
   const ROLE_COLOURS: Record<string, string> = {
     super_admin: 'border-purple-200 text-purple-700 bg-purple-50',
-    facilitator: 'border-blue-200 text-blue-700 bg-blue-50',
-    mentor: 'border-green-200 text-green-700 bg-green-50',
-    innovator: 'border-orange-200 text-orange-700 bg-orange-50',
-    funder_viewer: 'border-gray-200 text-gray-700 bg-gray-50',
+    facilitator: 'border-info/25 text-info bg-info/10',
+    mentor: 'border-success/25 text-success bg-success/10',
+    innovator: 'border-warning/25 text-warning bg-warning/10',
+    funder_viewer: 'border-gray-200 text-foreground bg-muted',
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Users</h1>
-          <p className="text-muted-foreground mt-1">{users.length} accounts on the platform</p>
-        </div>
+      <PageHeader
+        title="Users"
+        description={<>{users.length} accounts on the platform</>}
+        actions={
+          <>
         <CreateUserDialog>
           <Button>
             <UserPlus className="mr-2 h-4 w-4" />
             Add User
           </Button>
         </CreateUserDialog>
-      </div>
+          </>
+        }
+      />
 
-      <div className="rounded-lg border bg-white overflow-hidden">
+      <div className="rounded-lg border bg-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 border-b">
             <tr>
@@ -77,7 +80,7 @@ export default async function AdminUsersPage() {
                 <td className="px-4 py-3 text-muted-foreground">{formatDate(u.createdAt)}</td>
                 <td className="px-4 py-3">
                   {u.role === 'innovator' && !u.innovatorProfile && (
-                    <Button asChild size="sm" variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100 text-xs h-7">
+                    <Button asChild size="sm" variant="outline" className="text-warning border-amber-300 bg-warning/10 hover:bg-amber-100 text-xs h-7">
                       <Link href={`/dashboard/admin/setup-innovator/${u.id}`}>Setup needed</Link>
                     </Button>
                   )}

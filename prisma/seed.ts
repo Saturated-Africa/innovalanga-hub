@@ -7,6 +7,7 @@ import {
 } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { addDays, addMonths, startOfMonth, endOfMonth, addHours } from 'date-fns'
+import { EVENT_COLORS } from '../lib/event-colors'
 
 const prisma = new PrismaClient()
 
@@ -281,7 +282,7 @@ async function main() {
           durationMins: 60,
           bufferBefore: 0,
           bufferAfter: 15,
-          color: '#0ea5e9',
+          color: EVENT_COLORS[0],
           active: true,
         },
         {
@@ -292,7 +293,7 @@ async function main() {
           durationMins: 30,
           bufferBefore: 0,
           bufferAfter: 10,
-          color: '#8b5cf6',
+          color: EVENT_COLORS[1],
           active: true,
         },
       ],

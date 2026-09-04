@@ -104,9 +104,9 @@ export default async function CohortDetailPage({ params }: Props) {
       {/* Group average score cards */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Avg TRL', value: avgTRL.toFixed(1), color: 'text-blue-600' },
-          { label: 'Avg BRL', value: avgBRL.toFixed(1), color: 'text-green-600' },
-          { label: 'Avg IRL', value: avgIRL.toFixed(1), color: 'text-purple-600' },
+          { label: 'Avg TRL', value: avgTRL.toFixed(1), color: 'text-chart-1' },
+          { label: 'Avg BRL', value: avgBRL.toFixed(1), color: 'text-chart-2' },
+          { label: 'Avg IRL', value: avgIRL.toFixed(1), color: 'text-chart-3' },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="pt-6 text-center">
@@ -152,15 +152,15 @@ export default async function CohortDetailPage({ params }: Props) {
                 label: 'Name',
                 sortable: true,
                 render: (row: Row) => (
-                  <Link href={`/dashboard/innovators/${row.id}`} className="font-medium text-primary hover:underline">
+                  <Link href={`/dashboard/innovators/${row.id}`} className="link-brand">
                     {row.name}
                   </Link>
                 ),
               },
               { key: 'business', label: 'Business' },
-              { key: 'trl', label: 'TRL', render: (row: Row) => <span className="font-mono font-bold text-blue-600">{row.trl}</span> },
-              { key: 'brl', label: 'BRL', render: (row: Row) => <span className="font-mono font-bold text-green-600">{row.brl}</span> },
-              { key: 'irl', label: 'IRL', render: (row: Row) => <span className="font-mono font-bold text-purple-600">{row.irl}</span> },
+              { key: 'trl', label: 'TRL', render: (row: Row) => <span className="font-mono font-bold text-chart-1">{row.trl}</span> },
+              { key: 'brl', label: 'BRL', render: (row: Row) => <span className="font-mono font-bold text-chart-2">{row.brl}</span> },
+              { key: 'irl', label: 'IRL', render: (row: Row) => <span className="font-mono font-bold text-chart-3">{row.irl}</span> },
               { key: 'assessments', label: 'Assessments' },
               { key: 'sessions', label: 'Sessions' },
             ]}

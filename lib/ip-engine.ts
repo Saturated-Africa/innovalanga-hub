@@ -153,48 +153,41 @@ export function deriveRecommendations(answers: Answers): IPResult {
   }
 }
 
-export const REC_CONFIG: Record<string, { label: string; color: string; description: string }> = {
+export const REC_CONFIG: Record<string, { label: string; description: string }> = {
   PatentRequired: {
     label: 'Patent Required',
-    color: 'bg-blue-100 text-blue-800',
     description: 'File a provisional patent application immediately to secure your priority date. Consult a patent attorney before any public disclosure.',
   },
   TrademarkRequired: {
     label: 'Trademark Required',
-    color: 'bg-purple-100 text-purple-800',
     description: 'Register your brand name, logo, or slogan with the Companies and Intellectual Property Commission (CIPC) in South Africa.',
   },
   CopyrightApplicable: {
     label: 'Copyright Applicable',
-    color: 'bg-green-100 text-green-800',
     description: 'Copyright protection applies automatically — ensure written agreements assign ownership and consider formal registration as evidence.',
   },
   TradeSecret: {
     label: 'Trade Secret',
-    color: 'bg-orange-100 text-orange-800',
     description: 'Protect confidential information with NDAs, employee agreements, and strict access controls.',
   },
   MultipleProtection: {
     label: 'Multiple Protection Types',
-    color: 'bg-indigo-100 text-indigo-800',
     description: 'Your innovation requires more than one type of IP protection. Engage a specialist IP attorney for a comprehensive strategy.',
   },
   NoProtectionNeeded: {
     label: 'No Immediate Action',
-    color: 'bg-gray-100 text-gray-700',
     description: 'No formal IP protection is required at this stage. Reassess as your innovation develops.',
   },
   ReviewRequired: {
     label: 'Expert Review Required',
-    color: 'bg-yellow-100 text-yellow-800',
     description: 'Your situation requires expert review by an IP attorney before determining the right protection strategy.',
   },
 }
 
-export const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  NotAssessed: { label: 'Not Assessed', color: 'bg-gray-100 text-gray-700' },
-  Assessed: { label: 'Assessed', color: 'bg-blue-100 text-blue-800' },
-  ApplicationPending: { label: 'Application Pending', color: 'bg-yellow-100 text-yellow-800' },
-  Protected: { label: 'Protected', color: 'bg-green-100 text-green-800' },
-  Expired: { label: 'Expired', color: 'bg-red-100 text-red-800' },
+export const STATUS_CONFIG: Record<string, { label: string }> = {
+  NotAssessed: { label: 'Not Assessed' },
+  Assessed: { label: 'Assessed' },
+  ApplicationPending: { label: 'Application Pending' },
+  Protected: { label: 'Protected' },
+  Expired: { label: 'Expired' },
 }

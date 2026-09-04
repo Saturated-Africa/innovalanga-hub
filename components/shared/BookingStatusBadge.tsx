@@ -1,16 +1,20 @@
 import { Badge } from '@/components/ui/badge'
+import { BOOKING_STATUS, statusMeta } from '@/lib/status-colors'
 import type { BookingStatus } from '@prisma/client'
 
-const STATUS_CONFIG: Record<BookingStatus, { label: string; variant: 'success' | 'info' | 'warning' | 'destructive' | 'secondary' | 'outline' }> = {
-  Confirmed: { label: 'Confirmed', variant: 'info' },
-  InProgress: { label: 'In Progress', variant: 'warning' },
-  Completed: { label: 'Completed', variant: 'success' },
-  Cancelled: { label: 'Cancelled', variant: 'destructive' },
-  Rescheduled: { label: 'Rescheduled', variant: 'secondary' },
-  NoShowPendingReview: { label: 'No-show', variant: 'outline' },
+export function BookingStatusBadge({ status }: { status: BookingStatus }) {
+  const config = statusMeta(BOOKING_STATUS, status)
+  return <Badge variant={config.variant}>{config.label}</Badge>
 }
 
-export function BookingStatusBadge({ status }: { status: BookingStatus }) {
-  const config = STATUS_CONFIG[status]
-  return <Badge variant={config.variant}>{config.label}</Badge>
+/** The bare dot, for dense lists and timelines that can't fit a full badge. */
+export function BookingStatusDot({ status }: { status: BookingStatus }) {
+  const config = statusMeta(BOOKING_STATUS, status)
+  return (
+    <span
+      className={`inline-block h-2 w-2 shrink-0 rounded-full ${config.dot}`}
+      title={config.label}
+      aria-label={config.label}
+    />
+  )
 }

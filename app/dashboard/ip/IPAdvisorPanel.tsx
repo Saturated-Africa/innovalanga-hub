@@ -14,6 +14,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, ChevronDown, ChevronUp, Save } from 'lucide-react'
 import { REC_CONFIG, STATUS_CONFIG } from '@/lib/ip-engine'
+import { IP_RECOMMENDATION_VARIANT, IP_STATUS, statusMeta } from '@/lib/status-colors'
 import { useRouter } from 'next/navigation'
 
 interface AssessmentSummary {
@@ -75,10 +76,10 @@ export function IPAdvisorPanel({ assessment }: Props) {
             )}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
-            <Badge className={`text-xs py-0 ${recCfg?.color ?? 'bg-gray-100'}`}>
+            <Badge size="sm" variant={IP_RECOMMENDATION_VARIANT[assessment.primaryRec] ?? 'muted'}>
               {recCfg?.label ?? assessment.primaryRec}
             </Badge>
-            <Badge variant="outline" className={`text-xs py-0 ${statusCfg?.color ?? ''}`}>
+            <Badge size="sm" variant={statusMeta(IP_STATUS, assessment.status).variant}>
               {statusCfg?.label ?? assessment.status}
             </Badge>
           </div>
@@ -101,7 +102,7 @@ export function IPAdvisorPanel({ assessment }: Props) {
             <p className="text-xs font-medium text-muted-foreground mb-2">All protection types</p>
             <div className="flex flex-wrap gap-1.5">
               {assessment.recommendations.map((r) => (
-                <Badge key={r} className={`text-xs ${REC_CONFIG[r]?.color ?? 'bg-gray-100'}`}>
+                <Badge key={r} variant={IP_RECOMMENDATION_VARIANT[r] ?? 'muted'}>
                   {REC_CONFIG[r]?.label ?? r}
                 </Badge>
               ))}

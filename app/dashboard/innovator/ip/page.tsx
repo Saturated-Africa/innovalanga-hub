@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, ShieldCheck, ChevronRight, ChevronLeft, RotateCcw } from 'lucide-react'
 import { IP_QUESTIONS, REC_CONFIG, STATUS_CONFIG, type Answers } from '@/lib/ip-engine'
+import { IP_RECOMMENDATION_VARIANT, IP_STATUS, statusMeta } from '@/lib/status-colors'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 interface IPAssessment {
   id: string
@@ -103,10 +105,7 @@ export default function InnovatorIPPage() {
     const statusCfg = STATUS_CONFIG[assessment.status]
     return (
       <div className="space-y-6 max-w-2xl">
-        <div>
-          <h1 className="text-2xl font-bold">IP Protection Assessment</h1>
-          <p className="text-muted-foreground mt-1">Your intellectual property protection recommendation</p>
-        </div>
+      <PageHeader title="IP Protection Assessment" description="Your intellectual property protection recommendation" />
 
         <Card>
           <CardHeader>
@@ -115,7 +114,12 @@ export default function InnovatorIPPage() {
                 <CardTitle className="text-lg">{cfg?.label ?? assessment.primaryRec}</CardTitle>
                 <CardDescription className="mt-1">{cfg?.description}</CardDescription>
               </div>
-              <Badge className={`${cfg?.color} shrink-0`}>{cfg?.label}</Badge>
+              <Badge
+                variant={IP_RECOMMENDATION_VARIANT[assessment.primaryRec] ?? 'muted'}
+                className="shrink-0"
+              >
+                {cfg?.label}
+              </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -125,7 +129,7 @@ export default function InnovatorIPPage() {
                 <p className="text-sm font-medium mb-2">All applicable protection types:</p>
                 <div className="flex flex-wrap gap-2">
                   {assessment.recommendations.map((r) => (
-                    <Badge key={r} className={REC_CONFIG[r]?.color ?? 'bg-gray-100'}>
+                    <Badge key={r} variant={IP_RECOMMENDATION_VARIANT[r] ?? 'muted'}>
                       {REC_CONFIG[r]?.label ?? r}
                     </Badge>
                   ))}
@@ -143,7 +147,7 @@ export default function InnovatorIPPage() {
             <div className="flex items-center justify-between border-t pt-4">
               <div>
                 <p className="text-xs text-muted-foreground">IP Status</p>
-                <Badge className={statusCfg?.color} variant="outline">
+                <Badge variant={statusMeta(IP_STATUS, assessment.status).variant}>
                   {statusCfg?.label ?? assessment.status}
                 </Badge>
               </div>
@@ -154,11 +158,11 @@ export default function InnovatorIPPage() {
 
             {/* Advisor notes */}
             {assessment.advisorNotes && (
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+              <div className="rounded-lg border border-info/25 bg-info/10 p-4">
                 <p className="text-sm font-medium text-blue-900 mb-1">Advisor Notes</p>
                 <p className="text-sm text-blue-800">{assessment.advisorNotes}</p>
                 {assessment.reviewedBy && (
-                  <p className="text-xs text-blue-600 mt-2">— {assessment.reviewedBy}</p>
+                  <p className="text-xs text-info mt-2">— {assessment.reviewedBy}</p>
                 )}
               </div>
             )}
@@ -185,7 +189,7 @@ export default function InnovatorIPPage() {
         <Card>
           <CardContent className="pt-6 pb-6 flex flex-col items-center gap-5 text-center">
             <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <ShieldCheck className="h-7 w-7 text-primary" />
+              <ShieldCheck className="h-7 w-7 text-brand-volt-deep" />
             </div>
             <div>
               <p className="font-semibold text-lg">IP Questionnaire</p>
@@ -245,7 +249,7 @@ export default function InnovatorIPPage() {
                   onClick={() => handleAnswer(current.id, v)}
                   className={`rounded-lg border-2 py-3 text-sm font-medium transition-colors ${
                     answers[current.id] === v
-                      ? 'border-primary bg-primary/5 text-primary'
+                      ? 'border-primary bg-primary/10 text-foreground'
                       : 'border-border hover:border-primary/40'
                   }`}
                 >
@@ -263,7 +267,7 @@ export default function InnovatorIPPage() {
                   onClick={() => handleAnswer(current.id, opt.value)}
                   className={`w-full text-left rounded-lg border-2 px-4 py-3 text-sm transition-colors ${
                     answers[current.id] === opt.value
-                      ? 'border-primary bg-primary/5 text-primary'
+                      ? 'border-primary bg-primary/10 text-foreground'
                       : 'border-border hover:border-primary/40'
                   }`}
                 >

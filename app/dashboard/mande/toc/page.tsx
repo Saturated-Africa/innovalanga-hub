@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, Save } from 'lucide-react'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 const FIELDS = [
   { key: 'problem', label: 'Problem Statement', desc: 'What problem does this programme address?' },
@@ -73,16 +74,18 @@ export default function TheoryOfChangePage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Theory of Change</h1>
-          <p className="text-muted-foreground mt-1">Define the causal pathway from inputs to impact</p>
-        </div>
+      <PageHeader
+        title="Theory of Change"
+        description="Define the causal pathway from inputs to impact"
+        actions={
+          <>
         <Button onClick={handleSave} disabled={saving}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
           Save
         </Button>
-      </div>
+          </>
+        }
+      />
 
       <div className="space-y-4">
         {FIELDS.map(({ key, label, desc }) => (

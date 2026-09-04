@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/shared/DataTable'
 import { formatDate } from '@/lib/utils'
 import { ClipboardPlus } from 'lucide-react'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 const PERIOD_LABELS: Record<string, string> = {
   baseline: 'Baseline',
@@ -46,18 +47,20 @@ export default async function AssessmentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Assessments</h1>
-          <p className="text-muted-foreground mt-1">{assessments.length} total records</p>
-        </div>
+      <PageHeader
+        title="Assessments"
+        description={<>{assessments.length} total records</>}
+        actions={
+          <>
         <Button asChild>
           <Link href="/dashboard/assessments/new">
             <ClipboardPlus className="mr-2 h-4 w-4" />
             New Assessment
           </Link>
         </Button>
-      </div>
+          </>
+        }
+      />
 
       <DataTable
         data={rows}
@@ -69,7 +72,7 @@ export default async function AssessmentsPage() {
             label: 'Innovator',
             sortable: true,
             render: (row: Row) => (
-              <Link href={`/dashboard/innovators/${row.innovatorId}`} className="font-medium text-primary hover:underline">
+              <Link href={`/dashboard/innovators/${row.innovatorId}`} className="link-brand">
                 {row.innovator}
               </Link>
             ),
@@ -83,17 +86,17 @@ export default async function AssessmentsPage() {
           {
             key: 'trl',
             label: 'TRL',
-            render: (row: Row) => <span className="font-mono font-bold text-blue-600">{row.trl}</span>,
+            render: (row: Row) => <span className="font-mono font-bold text-chart-1">{row.trl}</span>,
           },
           {
             key: 'brl',
             label: 'BRL',
-            render: (row: Row) => <span className="font-mono font-bold text-green-600">{row.brl}</span>,
+            render: (row: Row) => <span className="font-mono font-bold text-chart-2">{row.brl}</span>,
           },
           {
             key: 'irl',
             label: 'IRL',
-            render: (row: Row) => <span className="font-mono font-bold text-purple-600">{row.irl}</span>,
+            render: (row: Row) => <span className="font-mono font-bold text-chart-3">{row.irl}</span>,
           },
           { key: 'assessedBy', label: 'Assessor' },
           {

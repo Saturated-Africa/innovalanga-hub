@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 import { CohortProgressChart } from './CohortProgressChart'
 import { Download } from 'lucide-react'
+import { BOOKING_STATUS, statusMeta } from '@/lib/status-colors'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default async function ReportsPage() {
   const session = await getSession()
@@ -69,10 +71,7 @@ export default async function ReportsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Programme Reports</h1>
-          <p className="text-muted-foreground mt-1">Programme Performance — Key Indicators</p>
-        </div>
+      <PageHeader title="Programme Reports" description="Programme Performance — Key Indicators" />
         <div className="flex items-center gap-2 flex-wrap">
           {(['innovators', 'assessments', 'sessions', 'stipends'] as const).map((type) => (
             <Button key={type} variant="outline" size="sm" asChild>
@@ -88,13 +87,13 @@ export default async function ReportsPage() {
       {/* KPI Grid */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
-          { label: 'Total Innovators', value: totalInnovators, color: 'text-blue-600' },
-          { label: 'Assessments Completed', value: totalAssessments, color: 'text-green-600' },
-          { label: 'Sessions Completed', value: completedSessions, color: 'text-purple-600' },
+          { label: 'Total Innovators', value: totalInnovators, color: 'text-foreground' },
+          { label: 'Assessments Completed', value: totalAssessments, color: 'text-foreground' },
+          { label: 'Sessions Completed', value: completedSessions, color: 'text-foreground' },
           {
             label: 'Stipends Disbursed',
             value: formatCurrency(totalStipendsPaid._sum.amount ?? 0),
-            color: 'text-orange-600',
+            color: 'text-warning',
           },
         ].map((kpi) => (
           <Card key={kpi.label}>
@@ -125,9 +124,9 @@ export default async function ReportsPage() {
                     </div>
                     <div className="flex gap-4 text-sm">
                       <span>{c._count.innovators} innovators</span>
-                      <span className="text-blue-600">TRL: {avgTRL}</span>
-                      <span className="text-green-600">BRL: {avgBRL}</span>
-                      <span className="text-purple-600">IRL: {avgIRL}</span>
+                      <span className="text-chart-1">TRL: {avgTRL}</span>
+                      <span className="text-chart-2">BRL: {avgBRL}</span>
+                      <span className="text-chart-3">IRL: {avgIRL}</span>
                     </div>
                   </div>
                 )
@@ -162,15 +161,11 @@ export default async function ReportsPage() {
             {sessionsByStatus.map((s) => (
               <div key={s.status} className="flex items-center gap-2">
                 <span
-                  className={`inline-block h-3 w-3 rounded-full ${
-                    s.status === 'Completed' ? 'bg-green-500'
-                    : s.status === 'Confirmed' ? 'bg-blue-500'
-                    : s.status === 'Cancelled' ? 'bg-red-500'
-                    : s.status === 'InProgress' ? 'bg-yellow-500'
-                    : 'bg-gray-400'
+                  className={`inline-block h-2.5 w-2.5 rounded-full ${
+                    statusMeta(BOOKING_STATUS, s.status).dot
                   }`}
                 />
-                <span className="text-sm">{s.status}</span>
+                <span className="text-sm">{statusMeta(BOOKING_STATUS, s.status).label}</span>
                 <span className="text-sm font-bold">{s._count._all}</span>
               </div>
             ))}

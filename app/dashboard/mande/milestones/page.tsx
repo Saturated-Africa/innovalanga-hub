@@ -24,6 +24,8 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, Plus, Pencil, Trash2, Flag } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import { MILESTONE_STATUS, type StatusMeta } from '@/lib/status-colors'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 type MilestoneStatus = 'NotStarted' | 'InProgress' | 'Completed' | 'Delayed' | 'AtRisk'
 
@@ -39,13 +41,7 @@ interface Milestone {
   innovator?: { firstName: string; lastName: string } | null
 }
 
-const STATUS_CONFIG: Record<MilestoneStatus, { label: string; color: string; dot: string }> = {
-  NotStarted: { label: 'Not Started', color: 'bg-gray-100 text-gray-800', dot: 'bg-gray-400' },
-  InProgress:  { label: 'In Progress', color: 'bg-blue-100 text-blue-800', dot: 'bg-blue-500' },
-  Completed:   { label: 'Completed', color: 'bg-green-100 text-green-800', dot: 'bg-green-500' },
-  Delayed:     { label: 'Delayed', color: 'bg-red-100 text-red-800', dot: 'bg-red-500' },
-  AtRisk:      { label: 'At Risk', color: 'bg-orange-100 text-orange-800', dot: 'bg-orange-500' },
-}
+const STATUS_CONFIG = MILESTONE_STATUS as Record<MilestoneStatus, StatusMeta>
 
 const STATUSES = Object.keys(STATUS_CONFIG) as MilestoneStatus[]
 
@@ -167,10 +163,7 @@ export default function MilestonesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Milestones</h1>
-          <p className="text-muted-foreground mt-1">Track programme milestones and delivery status</p>
-        </div>
+      <PageHeader title="Milestones" description="Track programme milestones and delivery status" />
         <Button onClick={openNew}>
           <Plus className="h-4 w-4 mr-2" />
           Add Milestone
@@ -226,11 +219,11 @@ export default function MilestonesPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm">{m.title}</span>
-                        <Badge className={`text-xs py-0 ${cfg.color}`}>{cfg.label}</Badge>
-                        {overdue && <Badge variant="destructive" className="text-xs py-0">Overdue</Badge>}
-                        {m.cohort && <Badge variant="outline" className="text-xs py-0">{m.cohort.name}</Badge>}
+                        <Badge size="sm" variant={cfg.variant}>{cfg.label}</Badge>
+                        {overdue && <Badge size="sm" variant="destructive">Overdue</Badge>}
+                        {m.cohort && <Badge size="sm" variant="outline">{m.cohort.name}</Badge>}
                         {m.innovator && (
-                          <Badge variant="outline" className="text-xs py-0">
+                          <Badge size="sm" variant="outline">
                             {m.innovator.firstName} {m.innovator.lastName}
                           </Badge>
                         )}

@@ -51,7 +51,7 @@ export default async function MentorAvailabilityPage() {
       </div>
 
       {/* Session types shortcut */}
-      <div className="rounded-lg border bg-white p-4 flex items-center justify-between gap-4">
+      <div className="rounded-lg border bg-card p-4 flex items-center justify-between gap-4">
         <div className="space-y-0.5">
           <p className="text-sm font-medium flex items-center gap-2">
             <Settings2 className="h-4 w-4" />
@@ -67,7 +67,7 @@ export default async function MentorAvailabilityPage() {
       </div>
 
       {/* Booking link */}
-      <div className="rounded-lg border bg-white p-4 space-y-3">
+      <div className="rounded-lg border bg-card p-4 space-y-3">
         <p className="text-sm font-medium flex items-center gap-2">
           <Link2 className="h-4 w-4" />
           Your Booking Link
@@ -83,7 +83,7 @@ export default async function MentorAvailabilityPage() {
       </div>
 
       {/* iCal feed */}
-      <div className="rounded-lg border bg-white p-4 space-y-3">
+      <div className="rounded-lg border bg-card p-4 space-y-3">
         <p className="text-sm font-medium flex items-center gap-2">
           <CalendarDays className="h-4 w-4" />
           Calendar Sync

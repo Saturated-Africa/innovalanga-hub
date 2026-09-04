@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatDate } from '@/lib/utils'
 import { Users, Calendar, MapPin } from 'lucide-react'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default async function CohortsPage() {
   const session = await getSession()
@@ -28,10 +29,7 @@ export default async function CohortsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Cohorts</h1>
-        <p className="text-muted-foreground mt-1">{cohorts.length} cohort{cohorts.length !== 1 ? 's' : ''}</p>
-      </div>
+      <PageHeader title="Cohorts" description={<>{cohorts.length} cohort{cohorts.length !== 1 ? 's' : ''}</>} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {cohorts.map((c) => {
@@ -83,15 +81,15 @@ export default async function CohortsPage() {
                 <div className="grid grid-cols-3 gap-2 pt-2 border-t">
                   <div className="text-center">
                     <p className="text-xs text-muted-foreground font-medium">Avg TRL</p>
-                    <p className="text-xl font-bold text-blue-600">{avgTRL}</p>
+                    <p className="text-xl font-bold text-chart-1">{avgTRL}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-xs text-muted-foreground font-medium">Avg BRL</p>
-                    <p className="text-xl font-bold text-green-600">{avgBRL}</p>
+                    <p className="text-xl font-bold text-chart-2">{avgBRL}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-xs text-muted-foreground font-medium">Avg IRL</p>
-                    <p className="text-xl font-bold text-purple-600">{avgIRL}</p>
+                    <p className="text-xl font-bold text-chart-3">{avgIRL}</p>
                   </div>
                 </div>
 

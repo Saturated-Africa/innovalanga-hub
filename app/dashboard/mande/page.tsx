@@ -7,14 +7,13 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Target, BarChart3, Users, Flag, BookOpen, FileText, Download } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import { MILESTONE_STATUS, statusMeta } from '@/lib/status-colors'
+import { PageHeader } from '@/components/shared/PageHeader'
 
-const STATUS_COLOR: Record<string, string> = {
-  NotStarted: 'bg-gray-400',
-  InProgress: 'bg-blue-500',
-  Completed: 'bg-green-500',
-  Delayed: 'bg-red-500',
-  AtRisk: 'bg-orange-500',
-}
+/** Dot colour per milestone status, from the shared status map. */
+const MILESTONE_DOT = new Proxy({} as Record<string, string>, {
+  get: (_t, key: string) => statusMeta(MILESTONE_STATUS, key).dot,
+})
 
 const STATUS_LABEL: Record<string, string> = {
   NotStarted: 'Not Started',
@@ -96,10 +95,7 @@ export default async function MandEPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">M&amp;E Dashboard</h1>
-          <p className="text-muted-foreground mt-1">{programme.name} — Monitoring &amp; Evaluation</p>
-        </div>
+      <PageHeader title="M&amp;E Dashboard" description={<>{programme.name} — Monitoring &amp; Evaluation</>} />
         <div className="flex gap-2">
           {(['indicators', 'milestones', 'beneficiaries'] as const).map((t) => (
             <Button key={t} variant="outline" size="sm" asChild>
@@ -118,7 +114,7 @@ export default async function MandEPage() {
           <Link key={ql.href} href={ql.href}>
             <Card className="hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer h-full">
               <CardContent className="pt-4 pb-3">
-                <ql.icon className="h-5 w-5 text-primary mb-2" />
+                <ql.icon className="mb-2 h-5 w-5 text-brand-volt-deep" />
                 <p className="text-sm font-medium">{ql.label}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{ql.desc}</p>
               </CardContent>
@@ -135,11 +131,11 @@ export default async function MandEPage() {
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {[
-              { label: 'Direct', value: latestBeneficiaries.direct, color: 'text-blue-600' },
+              { label: 'Direct', value: latestBeneficiaries.direct, color: 'text-info' },
               { label: 'Indirect', value: latestBeneficiaries.indirect, color: 'text-indigo-600' },
               { label: 'Female', value: latestBeneficiaries.female, color: 'text-pink-600' },
-              { label: 'Youth (<35)', value: latestBeneficiaries.youth, color: 'text-green-600' },
-              { label: 'PWD', value: latestBeneficiaries.pwd, color: 'text-orange-600' },
+              { label: 'Youth (<35)', value: latestBeneficiaries.youth, color: 'text-success' },
+              { label: 'PWD', value: latestBeneficiaries.pwd, color: 'text-warning' },
             ].map((kpi) => (
               <Card key={kpi.label}>
                 <CardContent className="pt-4">
@@ -191,7 +187,7 @@ export default async function MandEPage() {
                 )
               })}
               {indicators.length > 6 && (
-                <Link href="/dashboard/mande/indicators" className="text-xs text-primary hover:underline">
+                <Link href="/dashboard/mande/indicators" className="link-brand text-xs">
                   View all {indicators.length} indicators →
                 </Link>
               )}
@@ -209,9 +205,9 @@ export default async function MandEPage() {
                 <Flag className="h-4 w-4" /> Milestones
               </CardTitle>
               <div className="flex gap-3 text-sm">
-                <span className="text-green-600 font-medium">{milestoneStats.completed} done</span>
+                <span className="text-success font-medium">{milestoneStats.completed} done</span>
                 {milestoneStats.atRisk > 0 && (
-                  <span className="text-red-600 font-medium">{milestoneStats.atRisk} at risk</span>
+                  <span className="text-destructive font-medium">{milestoneStats.atRisk} at risk</span>
                 )}
               </div>
             </div>
@@ -220,7 +216,7 @@ export default async function MandEPage() {
             <div className="space-y-2">
               {milestones.map((m) => (
                 <div key={m.id} className="flex items-center gap-3 py-1.5 border-b last:border-0">
-                  <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${STATUS_COLOR[m.status]}`} />
+                  <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${MILESTONE_DOT[m.status]}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{m.title}</p>
                   </div>
@@ -233,7 +229,7 @@ export default async function MandEPage() {
                 </div>
               ))}
             </div>
-            <Link href="/dashboard/mande/milestones" className="text-xs text-primary hover:underline mt-3 block">
+            <Link href="/dashboard/mande/milestones" className="link-brand mt-3 block text-xs">
               Manage all milestones →
             </Link>
           </CardContent>

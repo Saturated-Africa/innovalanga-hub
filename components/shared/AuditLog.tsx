@@ -2,17 +2,11 @@ import { prisma } from '@/lib/prisma'
 import { formatDateTime } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
+import { AUDIT_ACTION_VARIANT } from '@/lib/status-colors'
 
 interface AuditLogProps {
   innovatorId: string
   limit?: number
-}
-
-const ACTION_COLOURS: Record<string, string> = {
-  create: 'bg-green-100 text-green-700',
-  update: 'bg-blue-100 text-blue-700',
-  delete: 'bg-red-100 text-red-700',
-  lock: 'bg-purple-100 text-purple-700',
 }
 
 export async function AuditLog({ innovatorId, limit = 50 }: AuditLogProps) {
@@ -33,13 +27,13 @@ export async function AuditLog({ innovatorId, limit = 50 }: AuditLogProps) {
       <div className="space-y-0 divide-y divide-border">
         {entries.map((e) => (
           <div key={e.id} className="flex items-start gap-3 py-3 px-1">
-            <span
-              className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium capitalize ${
-                ACTION_COLOURS[e.action] ?? 'bg-gray-100 text-gray-700'
-              }`}
+            <Badge
+              size="sm"
+              variant={AUDIT_ACTION_VARIANT[e.action] ?? 'muted'}
+              className="mt-0.5 shrink-0 capitalize"
             >
               {e.action}
-            </span>
+            </Badge>
             <div className="min-w-0 flex-1">
               <p className="text-sm">
                 <span className="font-medium capitalize">{e.entityType}</span>

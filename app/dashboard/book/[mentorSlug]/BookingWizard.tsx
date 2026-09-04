@@ -194,9 +194,9 @@ export function BookingWizard({ mentor, innovatorId }: BookingWizardProps) {
             <div
               className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
                 step > s.n
-                  ? 'bg-primary text-white'
+                  ? 'bg-primary text-primary-foreground'
                   : step === s.n
-                  ? 'bg-primary text-white ring-2 ring-primary ring-offset-2'
+                  ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2'
                   : 'bg-muted text-muted-foreground'
               }`}
             >
@@ -243,7 +243,7 @@ export function BookingWizard({ mentor, innovatorId }: BookingWizardProps) {
                     </div>
                   </div>
                   {selectedEventType?.id === et.id && (
-                    <Check className="h-4 w-4 text-primary shrink-0" />
+                    <Check className="h-4 w-4 shrink-0 text-brand-volt-deep" />
                   )}
                 </div>
               </button>
@@ -287,7 +287,7 @@ export function BookingWizard({ mentor, innovatorId }: BookingWizardProps) {
                     onClick={() => { setSelectedDate(day); setSelectedSlot(null) }}
                     className={`flex flex-col items-center rounded-lg p-2 text-sm transition-colors ${
                       isSelected
-                        ? 'bg-primary text-white'
+                        ? 'bg-primary text-primary-foreground'
                         : isAvailable
                         ? 'hover:bg-accent cursor-pointer'
                         : 'opacity-30 cursor-not-allowed'
@@ -330,8 +330,8 @@ export function BookingWizard({ mentor, innovatorId }: BookingWizardProps) {
                     onClick={() => setSelectedSlot(slot)}
                     className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
                       selectedSlot?.label === slot.label
-                        ? 'bg-primary text-white border-primary'
-                        : 'hover:border-primary hover:text-primary'
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'hover:border-primary hover:bg-primary/10'
                     }`}
                   >
                     {slot.label}

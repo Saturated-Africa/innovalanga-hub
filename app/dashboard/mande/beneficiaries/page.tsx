@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, Plus, Trash2, Users } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 interface BeneficiaryCount {
   id: string
@@ -124,26 +125,28 @@ export default function BeneficiariesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Beneficiary Counts</h1>
-          <p className="text-muted-foreground mt-1">Track direct and indirect beneficiaries by reporting period</p>
-        </div>
+      <PageHeader
+        title="Beneficiary Counts"
+        description="Track direct and indirect beneficiaries by reporting period"
+        actions={
+          <>
         <Button onClick={() => { setForm(EMPTY_FORM); setOpen(true) }}>
           <Plus className="h-4 w-4 mr-2" />
           Add Period
         </Button>
-      </div>
+          </>
+        }
+      />
 
       {/* Cumulative summary */}
       {counts.length > 0 && (
         <div className="grid grid-cols-5 gap-3">
           {[
-            { label: 'Total Direct', value: totals.direct, color: 'text-blue-600' },
+            { label: 'Total Direct', value: totals.direct, color: 'text-info' },
             { label: 'Total Indirect', value: totals.indirect, color: 'text-indigo-600' },
             { label: 'Female', value: totals.female, color: 'text-pink-600' },
-            { label: 'Youth (<35)', value: totals.youth, color: 'text-green-600' },
-            { label: 'PWD', value: totals.pwd, color: 'text-orange-600' },
+            { label: 'Youth (<35)', value: totals.youth, color: 'text-success' },
+            { label: 'PWD', value: totals.pwd, color: 'text-warning' },
           ].map((kpi) => (
             <Card key={kpi.label}>
               <CardContent className="pt-4 pb-3">
@@ -185,11 +188,11 @@ export default function BeneficiariesPage() {
                 </div>
                 <div className="mt-3 grid grid-cols-5 gap-3">
                   {[
-                    { label: 'Direct', value: c.direct, color: 'text-blue-600' },
+                    { label: 'Direct', value: c.direct, color: 'text-info' },
                     { label: 'Indirect', value: c.indirect, color: 'text-indigo-600' },
                     { label: 'Female', value: c.female, color: 'text-pink-600' },
-                    { label: 'Youth', value: c.youth, color: 'text-green-600' },
-                    { label: 'PWD', value: c.pwd, color: 'text-orange-600' },
+                    { label: 'Youth', value: c.youth, color: 'text-success' },
+                    { label: 'PWD', value: c.pwd, color: 'text-warning' },
                   ].map((stat) => (
                     <div key={stat.label} className="text-center">
                       <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
