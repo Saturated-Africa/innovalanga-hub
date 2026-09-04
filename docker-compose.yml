@@ -25,7 +25,11 @@ services:
       CRON_SECRET: ${CRON_SECRET}
       AWS_REGION: ${AWS_REGION:-af-south-1}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET}
-      AI_PROVIDER: ${AI_PROVIDER:-bedrock}
+      # No default provider on purpose. `${VAR:-default}` substitutes when the
+      # variable is unset OR EMPTY, so defaulting this to a provider silently
+      # overrides a deliberate `AI_PROVIDER=` and makes the app advertise an
+      # assistant it cannot reach. Turning inference on is an explicit act.
+      AI_PROVIDER: ${AI_PROVIDER:-}
       AI_MODEL: ${AI_MODEL:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
     expose:
