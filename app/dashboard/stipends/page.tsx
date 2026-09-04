@@ -6,6 +6,7 @@ import { StipendStatusBadge } from '@/components/shared/StipendStatusBadge'
 import { RecalculateStipendButton } from '@/components/dashboard/RecalculateStipendButton'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { StipendsTable } from './StipendsTable'
 
 export default async function StipendsPage() {
   const session = await getSession()
@@ -59,29 +60,7 @@ export default async function StipendsPage() {
         </div>
       </div>
 
-      <DataTable
-        data={rows}
-        searchKeys={['innovator', 'business', 'period']}
-        csvFilename="stipends.csv"
-        columns={[
-          { key: 'innovator', label: 'Innovator', sortable: true },
-          { key: 'business', label: 'Business' },
-          { key: 'period', label: 'Period' },
-          { key: 'hours', label: 'Hours' },
-          { key: 'amount', label: 'Amount' },
-          {
-            key: 'status',
-            label: 'Status',
-            render: (row: Row) => <StipendStatusBadge status={row.status as any} />,
-          },
-          { key: 'paidAt', label: 'Paid Date' },
-          {
-            key: '_stipendId',
-            label: '',
-            render: (row: Row) => <RecalculateStipendButton stipendRecordId={row._stipendId as string} />,
-          },
-        ]}
-      />
+      <StipendsTable rows={rows} />
     </div>
   )
 }

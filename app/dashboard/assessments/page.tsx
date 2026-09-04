@@ -8,6 +8,7 @@ import { DataTable } from '@/components/shared/DataTable'
 import { formatDate } from '@/lib/utils'
 import { ClipboardPlus } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { AssessmentsTable } from './AssessmentsTable'
 
 const PERIOD_LABELS: Record<string, string> = {
   baseline: 'Baseline',
@@ -62,55 +63,7 @@ export default async function AssessmentsPage() {
         }
       />
 
-      <DataTable
-        data={rows}
-        searchKeys={['innovator', 'business', 'period', 'assessedBy']}
-        csvFilename="assessments.csv"
-        columns={[
-          {
-            key: 'innovator',
-            label: 'Innovator',
-            sortable: true,
-            render: (row: Row) => (
-              <Link href={`/dashboard/innovators/${row.innovatorId}`} className="link-brand">
-                {row.innovator}
-              </Link>
-            ),
-          },
-          { key: 'business', label: 'Business' },
-          {
-            key: 'period',
-            label: 'Period',
-            render: (row: Row) => <Badge variant="outline">{row.period}</Badge>,
-          },
-          {
-            key: 'trl',
-            label: 'TRL',
-            render: (row: Row) => <span className="font-mono font-bold text-chart-1">{row.trl}</span>,
-          },
-          {
-            key: 'brl',
-            label: 'BRL',
-            render: (row: Row) => <span className="font-mono font-bold text-chart-2">{row.brl}</span>,
-          },
-          {
-            key: 'irl',
-            label: 'IRL',
-            render: (row: Row) => <span className="font-mono font-bold text-chart-3">{row.irl}</span>,
-          },
-          { key: 'assessedBy', label: 'Assessor' },
-          {
-            key: 'locked',
-            label: 'Locked',
-            render: (row: Row) => (
-              row.locked === 'Yes'
-                ? <Badge variant="secondary">Locked</Badge>
-                : <Badge variant="outline">Draft</Badge>
-            ),
-          },
-          { key: 'date', label: 'Date', sortable: true },
-        ]}
-      />
+      <AssessmentsTable rows={rows} />
     </div>
   )
 }

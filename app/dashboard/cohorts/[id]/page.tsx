@@ -10,6 +10,7 @@ import { TrajectoryChart } from '@/components/readiness/TrajectoryChart'
 import { DataTable } from '@/components/shared/DataTable'
 import { formatDate } from '@/lib/utils'
 import { ArrowLeft } from 'lucide-react'
+import { CohortInnovatorsTable } from './CohortInnovatorsTable'
 
 interface Props {
   params: { id: string }
@@ -143,28 +144,7 @@ export default async function CohortDetailPage({ params }: Props) {
       <Card>
         <CardHeader><CardTitle className="text-base">Innovators ({cohort.innovators.length})</CardTitle></CardHeader>
         <CardContent>
-          <DataTable
-            data={rows}
-            searchKeys={['name', 'email', 'business']}
-            columns={[
-              {
-                key: 'name',
-                label: 'Name',
-                sortable: true,
-                render: (row: Row) => (
-                  <Link href={`/dashboard/innovators/${row.id}`} className="link-brand">
-                    {row.name}
-                  </Link>
-                ),
-              },
-              { key: 'business', label: 'Business' },
-              { key: 'trl', label: 'TRL', render: (row: Row) => <span className="font-mono font-bold text-chart-1">{row.trl}</span> },
-              { key: 'brl', label: 'BRL', render: (row: Row) => <span className="font-mono font-bold text-chart-2">{row.brl}</span> },
-              { key: 'irl', label: 'IRL', render: (row: Row) => <span className="font-mono font-bold text-chart-3">{row.irl}</span> },
-              { key: 'assessments', label: 'Assessments' },
-              { key: 'sessions', label: 'Sessions' },
-            ]}
-          />
+          <CohortInnovatorsTable rows={rows} />
         </CardContent>
       </Card>
     </div>

@@ -9,6 +9,7 @@ import { formatDate } from '@/lib/utils'
 import { UserPlus } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { resolveProgrammeId } from '@/lib/scope'
+import { InnovatorsTable } from './InnovatorsTable'
 
 export default async function InnovatorsPage() {
   const session = await getSession()
@@ -72,55 +73,7 @@ export default async function InnovatorsPage() {
         }
       />
 
-      <DataTable
-        data={rows}
-        searchKeys={['name', 'email', 'businessName', 'cohort']}
-        csvFilename="innovators.csv"
-        columns={[
-          {
-            key: 'name',
-            label: 'Name',
-            sortable: true,
-            render: (row: Row) => (
-              <Link href={`/dashboard/innovators/${row.id}`} className="link-brand">
-                {row.name}
-              </Link>
-            ),
-          },
-          { key: 'cohort', label: 'Cohort', sortable: true },
-          {
-            key: 'region',
-            label: 'Region',
-            render: (row: Row) => (
-              <Badge variant="outline" className="text-xs">{row.region}</Badge>
-            ),
-          },
-          { key: 'businessName', label: 'Business', sortable: true },
-          { key: 'sector', label: 'Sector' },
-          {
-            key: 'latestTRL',
-            label: 'TRL',
-            render: (row: Row) => (
-              <span className="font-mono font-semibold text-chart-1">{row.latestTRL}</span>
-            ),
-          },
-          {
-            key: 'latestBRL',
-            label: 'BRL',
-            render: (row: Row) => (
-              <span className="font-mono font-semibold text-chart-2">{row.latestBRL}</span>
-            ),
-          },
-          {
-            key: 'latestIRL',
-            label: 'IRL',
-            render: (row: Row) => (
-              <span className="font-mono font-semibold text-chart-3">{row.latestIRL}</span>
-            ),
-          },
-          { key: 'sessions', label: 'Sessions' },
-        ]}
-      />
+      <InnovatorsTable rows={rows} />
     </div>
   )
 }

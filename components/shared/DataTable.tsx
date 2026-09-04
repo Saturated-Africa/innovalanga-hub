@@ -27,7 +27,7 @@ interface Column<T> {
   value?: (row: T) => string | number | null | undefined
 }
 
-interface DataTableProps<T extends Record<string, unknown>> {
+interface DataTableProps<T extends object> {
   data: T[]
   columns: Column<T>[]
   searchKeys?: (keyof T)[]
@@ -37,7 +37,7 @@ interface DataTableProps<T extends Record<string, unknown>> {
   emptyMessage?: string
 }
 
-export function DataTable<T extends Record<string, unknown>>({
+export function DataTable<T extends object>({
   data,
   columns,
   searchKeys = [],
@@ -52,14 +52,19 @@ export function DataTable<T extends Record<string, unknown>>({
 
   /** Cell value for sorting/export — `value` wins, else the raw field. */
   function cellValue(row: T, col: Column<T>): unknown {
-    return col.value ? col.value(row) : row[col.key as keyof T]
+    if (col.value) return col.value(row)
+    return (row as Record<string, unknown>)[col.key as string]
   }
 
   const filtered = useMemo(() => {
     if (!search) return data
     const q = search.toLowerCase()
     return data.filter((row) =>
-      searchKeys.some((key) => String(row[key] ?? '').toLowerCase().includes(q))
+      searchKeys.some((key) =>
+        String((row as Record<string, unknown>)[key as string] ?? '')
+          .toLowerCase()
+          .includes(q)
+      )
     )
   }, [data, search, searchKeys])
 
@@ -67,8 +72,8 @@ export function DataTable<T extends Record<string, unknown>>({
     if (!sortKey) return filtered
     const col = columns.find((c) => String(c.key) === sortKey)
     return [...filtered].sort((a, b) => {
-      const av = col ? cellValue(a, col) : a[sortKey as keyof T]
-      const bv = col ? cellValue(b, col) : b[sortKey as keyof T]
+      const av = col ? cellValue(a, col) : (a as Record<string, unknown>)[sortKey]
+      const bv = col ? cellValue(b, col) : (b as Record<string, unknown>)[sortKey]
 
       // Numeric columns (readiness scores, hours, amounts) must not sort as
       // text — "10" sorting before "9" was the previous behaviour.
@@ -228,7 +233,9 @@ export function DataTable<T extends Record<string, unknown>>({
                         col.align === 'right' && 'text-right tabular-nums'
                       )}
                     >
-                      {col.render ? col.render(row) : String(row[col.key as keyof T] ?? '')}
+                      {col.render
+                        ? col.render(row)
+                        : String((row as Record<string, unknown>)[col.key as string] ?? '')}
                     </td>
                   ))}
                 </tr>
