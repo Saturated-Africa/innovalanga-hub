@@ -37,6 +37,11 @@ export function AssistantPanel() {
   const [streaming, setStreaming] = useState(false)
   const [activity, setActivity] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // token -> real name. The server pseudonymises before sending anything to a
+  // remote model; the reader is already authorised to see these names, so the
+  // reversal happens here rather than in the stream (which would have to cope
+  // with a token split across two chunks).
+  const [pseudonyms, setPseudonyms] = useState<Record<string, string>>({})
 
   const abortRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -114,6 +119,8 @@ export function AssistantPanel() {
                 }
                 return copy
               })
+            } else if (event === 'pseudonyms') {
+              setPseudonyms(data as Record<string, string>)
             } else if (event === 'tool' && typeof data.name === 'string') {
               setActivity(TOOL_LABELS[data.name] ?? 'Looking that up')
             } else if (event === 'error') {
@@ -138,6 +145,18 @@ export function AssistantPanel() {
       }
     },
     [messages, streaming]
+  )
+
+  /** Swap pseudonym tokens back to real names for display. */
+  const rehydrate = useCallback(
+    (text: string) => {
+      let out = text
+      for (const token of Object.keys(pseudonyms).sort((a, b) => b.length - a.length)) {
+        out = out.split(token).join(pseudonyms[token])
+      }
+      return out
+    },
+    [pseudonyms]
   )
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -202,7 +221,7 @@ export function AssistantPanel() {
                   <InnovalangaMark className="h-3 text-brand-volt" />
                 </span>
                 <div className="min-w-0 flex-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                  {m.content}
+                  {rehydrate(m.content)}
                   {streaming && i === messages.length - 1 && !m.content && (
                     <span className="text-muted-foreground">…</span>
                   )}

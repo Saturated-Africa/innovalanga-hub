@@ -1,4 +1,4 @@
-import type Anthropic from '@anthropic-ai/sdk'
+import type { ToolDefinition } from '@/lib/ai/providers/types'
 import { prisma } from '@/lib/prisma'
 import {
   assertInnovatorInScope,
@@ -35,7 +35,7 @@ type ToolHandler = (
 ) => Promise<unknown>
 
 interface AssistantTool {
-  definition: Anthropic.Tool
+  definition: ToolDefinition
   handler: ToolHandler
   /** Roles permitted to call this tool. */
   roles: Array<ScopedContext['role']>
@@ -78,7 +78,7 @@ const TOOLS: Record<string, AssistantTool> = {
       name: 'get_programme_overview',
       description:
         'Get the programme configuration: name, the readiness dimensions in use and their score ranges, the assessment periods, regions, and which modules are enabled. Call this first when a question depends on how the programme is set up.',
-      input_schema: { type: 'object', properties: {}, additionalProperties: false },
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
     handler: async (_input, ctx) => {
       if (!ctx.programmeId) return NO_SCOPE
@@ -115,7 +115,7 @@ const TOOLS: Record<string, AssistantTool> = {
       name: 'explain_readiness_level',
       description:
         'Get the official level name for a readiness score on a given dimension (TRL, BRL, IRL or MRL). Use this whenever you refer to a score so you can say "TRL 4 — Validated in Lab" rather than a bare number.',
-      input_schema: {
+      inputSchema: {
         type: 'object',
         properties: {
           dimension: { type: 'string', enum: ['TRL', 'BRL', 'IRL', 'MRL'] },
@@ -148,7 +148,7 @@ const TOOLS: Record<string, AssistantTool> = {
       name: 'list_innovators',
       description:
         'List the participants the signed-in user can see, with their cohort, region, business and latest readiness scores. Supports an optional name/business search.',
-      input_schema: {
+      inputSchema: {
         type: 'object',
         properties: {
           search: { type: 'string', description: 'Optional name or business substring.' },
@@ -217,7 +217,7 @@ const TOOLS: Record<string, AssistantTool> = {
       name: 'get_innovator_detail',
       description:
         "Get one participant's full assessment history, session history and IP status. An innovator calling this always gets their own record; omit innovator_id for that case.",
-      input_schema: {
+      inputSchema: {
         type: 'object',
         properties: {
           innovator_id: {
@@ -319,7 +319,7 @@ const TOOLS: Record<string, AssistantTool> = {
       name: 'list_sessions',
       description:
         'List mentorship sessions in scope, optionally filtered by status or limited to upcoming ones. Use for "what is coming up", "who did I meet", and session-history questions.',
-      input_schema: {
+      inputSchema: {
         type: 'object',
         properties: {
           status: {
@@ -388,7 +388,7 @@ const TOOLS: Record<string, AssistantTool> = {
       name: 'get_programme_kpis',
       description:
         'Get aggregate programme statistics: participant count, assessments completed, sessions completed, average readiness scores per cohort, and the session status breakdown. Contains no personal data.',
-      input_schema: { type: 'object', properties: {}, additionalProperties: false },
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
     handler: async (_input, ctx) => {
       if (!ctx.programmeId) return NO_SCOPE
@@ -462,7 +462,7 @@ const TOOLS: Record<string, AssistantTool> = {
       name: 'get_mande_summary',
       description:
         'Get the monitoring and evaluation picture: theory of change, indicators with their latest values against target, beneficiary reach for the most recent period, and milestone status. This is the grounding for funder reporting narratives.',
-      input_schema: { type: 'object', properties: {}, additionalProperties: false },
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
     handler: async (_input, ctx) => {
       const where = programmeWhere(ctx)
@@ -546,7 +546,7 @@ const TOOLS: Record<string, AssistantTool> = {
       name: 'get_stipend_summary',
       description:
         'Get stipend records in scope, with hours completed, amount and eligibility status. An innovator sees only their own. Use this to explain how a stipend figure was arrived at.',
-      input_schema: {
+      inputSchema: {
         type: 'object',
         properties: { limit: { type: 'integer', minimum: 1, maximum: 100 } },
         additionalProperties: false,
@@ -597,7 +597,7 @@ const TOOLS: Record<string, AssistantTool> = {
  * -------------------------------------------------------------------- */
 
 /** Tool definitions this user may actually use. */
-export function toolsForContext(ctx: ScopedContext): Anthropic.Tool[] {
+export function toolsForContext(ctx: ScopedContext): ToolDefinition[] {
   return Object.values(TOOLS)
     .filter((t) => t.roles.includes(ctx.role))
     .filter((t) => !t.module || ctx.modules[t.module])

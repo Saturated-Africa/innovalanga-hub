@@ -16,12 +16,15 @@
     "db:migrate-event-colors": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/migrate-event-colors.ts",
     "test:scope": "node --test --experimental-strip-types lib/scope.test.ts",
     "test:tenancy": "node --test --experimental-strip-types lib/tenancy.test.ts",
-    "test": "node --test --experimental-strip-types lib/*.test.ts"
+    "test": "node --test --experimental-strip-types lib/*.test.ts",
+    "test:redact": "node --test --experimental-strip-types lib/redact.test.ts",
+    "test:ollama": "node --test --experimental-strip-types lib/ollama-protocol.test.ts"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.33.3",
     "@anthropic-ai/sdk": "^0.123.0",
     "@hookform/resolvers": "^3.10.0",
     "@next-auth/prisma-adapter": "^1.0.7",

@@ -1,17 +1,29 @@
 import { NextResponse } from 'next/server'
-import type Anthropic from '@anthropic-ai/sdk'
 import { getSession } from '@/lib/auth'
 import { getScopedContext } from '@/lib/scope'
 import { toolsForContext, runTool } from '@/lib/ai/tools'
 import { buildSystemPrompt } from '@/lib/ai/prompts'
-import { getAnthropic, ASSISTANT_MODEL, ASSISTANT_MAX_TOKENS } from '@/lib/ai/client'
+import {
+  getProvider,
+  isAssistantEnabled,
+  ProviderUnavailableError,
+  type ChatMessage,
+} from '@/lib/ai/providers'
+import {
+  buildPseudonymMap,
+  redactText,
+  redactValue,
+  EMPTY_MAP,
+} from '@/lib/ai/pseudonymise'
 
 /*
   Node runtime, not Edge: this route reaches Prisma through the tool layer, and
-  Prisma (along with bcryptjs and node:crypto elsewhere in the app) is Node-only.
+  Prisma (along with bcryptjs and node:crypto elsewhere) is Node-only.
 
-  `maxDuration` matters — the platform default would cut a streamed answer off
-  mid-sentence. `vercel.json` carries the matching function config.
+  Self-hosted note: `maxDuration` below is a Vercel concept and is ignored by
+  `next start`. Off Vercel the real ceiling is the reverse proxy, so Caddy must
+  disable buffering and allow a long read timeout for this path. The
+  `X-Accel-Buffering: no` header below covers nginx-style proxies.
 */
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -29,9 +41,9 @@ export async function POST(req: Request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!isAssistantEnabled()) {
     return NextResponse.json(
-      { error: 'The assistant is not configured. ANTHROPIC_API_KEY is not set.' },
+      { error: 'The assistant is not configured on this deployment.' },
       { status: 503 }
     )
   }
@@ -49,7 +61,7 @@ export async function POST(req: Request) {
   }
 
   // Bound the history so a long conversation cannot grow without limit.
-  const history: Anthropic.MessageParam[] = incoming
+  const history: ChatMessage[] = incoming
     .slice(-20)
     .filter((m) => typeof m.content === 'string' && m.content.trim().length > 0)
     .map((m) => ({
@@ -58,89 +70,96 @@ export async function POST(req: Request) {
     }))
 
   if (history.length === 0 || history[0].role !== 'user') {
-    return NextResponse.json({ error: 'Conversation must start with a user message' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Conversation must start with a user message' },
+      { status: 400 }
+    )
   }
 
   const ctx = await getScopedContext(session)
-  const client = getAnthropic()
+
+  let provider
+  try {
+    provider = getProvider()
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'No provider configured.' },
+      { status: 503 }
+    )
+  }
+
   const tools = toolsForContext(ctx)
   const system = buildSystemPrompt(ctx)
+
+  // Only pay for the roster lookup when the prompt actually leaves our network.
+  const pseudonyms = provider.isRemote ? await buildPseudonymMap(ctx) : EMPTY_MAP
+
+  // The user may have typed a real name; it must not reach a remote provider.
+  const messages: ChatMessage[] = history.map((m) =>
+    m.role === 'user' ? { ...m, content: redactText(m.content, pseudonyms) } : m
+  )
 
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
     async start(controller) {
-      /** Server-sent event frame. */
       const send = (event: string, data: unknown) => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+        controller.enqueue(
+          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+        )
       }
 
-      const messages: Anthropic.MessageParam[] = [...history]
+      // The browser reverses the mapping for display. Sent first so the panel
+      // can rehydrate text as it streams.
+      if (Object.keys(pseudonyms.toReal).length > 0) {
+        send('pseudonyms', pseudonyms.toReal)
+      }
 
       try {
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-          const response = await client.messages.stream({
-            model: ASSISTANT_MODEL,
-            max_tokens: ASSISTANT_MAX_TOKENS,
-            thinking: { type: 'adaptive' },
-            // The system prompt is stable per role, so it caches; the
-            // conversation after it is the volatile part.
-            system: [
-              {
-                type: 'text',
-                text: system,
-                cache_control: { type: 'ephemeral' },
-              },
-            ],
-            tools,
-            messages,
-          })
+          let assistantText = ''
+          const toolCalls: { id: string; name: string; input: Record<string, unknown> }[] = []
+          let stopReason = 'end_turn'
 
-          // Forward text as it is produced.
-          response.on('text', (delta) => send('delta', { text: delta }))
+          for await (const event of provider.streamTurn({ system, messages, tools })) {
+            if (event.type === 'text') {
+              assistantText += event.text
+              send('delta', { text: event.text })
+            } else if (event.type === 'tool_call') {
+              toolCalls.push(event.call)
+            } else {
+              stopReason = event.stopReason
+              send('usage', { ...event.usage, provider: provider.id, model: provider.model })
+            }
+          }
 
-          const final = await response.finalMessage()
-
-          if (final.stop_reason !== 'tool_use') {
-            send('usage', {
-              inputTokens: final.usage.input_tokens,
-              outputTokens: final.usage.output_tokens,
-              cacheRead: final.usage.cache_read_input_tokens ?? 0,
-              cacheWrite: final.usage.cache_creation_input_tokens ?? 0,
-            })
-            send('done', { stopReason: final.stop_reason })
+          if (toolCalls.length === 0) {
+            send('done', { stopReason })
             controller.close()
             return
           }
 
-          // Execute every requested tool, then hand all results back in a
-          // single user message — splitting them would suppress parallel calls.
-          messages.push({ role: 'assistant', content: final.content })
+          messages.push({ role: 'assistant', content: assistantText, toolCalls })
 
-          const toolUses = final.content.filter(
-            (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
-          )
-
-          const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
-            toolUses.map(async (block) => {
-              send('tool', { name: block.name })
-              const output = await runTool(
-                block.name,
-                (block.input ?? {}) as Record<string, unknown>,
-                ctx
-              )
+          // Run the requested tools in parallel, then append every result.
+          const results = await Promise.all(
+            toolCalls.map(async (call) => {
+              send('tool', { name: call.name })
+              const output = await runTool(call.name, call.input, ctx)
               return {
-                type: 'tool_result' as const,
-                tool_use_id: block.id,
-                content: JSON.stringify(output),
+                role: 'tool' as const,
+                toolCallId: call.id,
+                name: call.name,
+                // Redact BEFORE serialising: this is the point where real names
+                // would otherwise be handed to a remote model.
+                content: JSON.stringify(redactValue(output, pseudonyms)),
               }
             })
           )
 
-          messages.push({ role: 'user', content: results })
+          messages.push(...results)
         }
 
-        // Ran out of rounds without a final answer.
         send('delta', {
           text: '\n\nI could not finish working that out. Could you narrow the question?',
         })
@@ -150,8 +169,8 @@ export async function POST(req: Request) {
         console.error('[assistant] stream failed:', err)
         send('error', {
           message:
-            err instanceof Error && err.message === 'ANTHROPIC_API_KEY not set'
-              ? 'The assistant is not configured.'
+            err instanceof ProviderUnavailableError
+              ? err.message
               : 'Something went wrong reaching the assistant. Please try again.',
         })
         controller.close()
@@ -164,7 +183,6 @@ export async function POST(req: Request) {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
-      // Stops proxies buffering the stream into one lump.
       'X-Accel-Buffering': 'no',
     },
   })

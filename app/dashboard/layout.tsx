@@ -4,7 +4,7 @@ import { Sidebar } from '@/components/dashboard/sidebar'
 import { MobileNav } from '@/components/dashboard/MobileNav'
 import { NotificationBell } from '@/components/dashboard/NotificationBell'
 import { AssistantLauncher } from '@/components/assistant/AssistantLauncher'
-import { isAssistantEnabled } from '@/lib/ai/client'
+import { isAssistantEnabled } from '@/lib/ai/providers'
 import { InnovalangaLogo } from '@/components/brand/Logo'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
