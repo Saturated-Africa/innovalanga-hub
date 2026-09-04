@@ -5,7 +5,17 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY)
 }
 
-const FROM = 'Innovalanga Hub <noreply@innovalanga.org.za>'
+/**
+ * Sender address.
+ *
+ * Must be a domain that is verified in Resend and whose SPF and DKIM records
+ * we actually control, otherwise every message silently fails authentication
+ * and lands in spam. Innovalanga uses innovalanga.co.za.
+ *
+ * Overridable so a staging environment can send from its own subdomain without
+ * a code change.
+ */
+const FROM = process.env.EMAIL_FROM ?? 'Innovalanga Hub <noreply@innovalanga.co.za>'
 
 export async function sendBookingConfirmation(params: {
   innovatorEmail: string

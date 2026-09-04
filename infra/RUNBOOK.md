@@ -84,7 +84,14 @@ docker compose exec app npx prisma db seed      # first deploy only
 Environment values the container needs, beyond the secrets:
 `NEXTAUTH_URL=https://hub.innovalanga.co.za`, `AWS_REGION=af-south-1`,
 `AWS_S3_BUCKET` (from the Data stack), `AI_PROVIDER=bedrock`, and `AI_MODEL`
-from step 0.
+from step 0. `EMAIL_FROM` is optional and defaults to
+`noreply@innovalanga.co.za`.
+
+**Verify the sending domain in Resend before go-live.** The application sends
+booking confirmations, no-show alerts and session summaries from
+`innovalanga.co.za`. Until that domain is verified in Resend with its SPF and
+DKIM records published at 1-Grid, those messages will fail authentication and
+land in spam. This is independent of the web DNS record in step 5.
 
 ## 5. DNS and TLS
 
