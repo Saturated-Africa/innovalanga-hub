@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import AWS from 'aws-sdk'
-
-const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: process.env.AWS_REGION ?? 'af-south-1',
-})
+import { DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { getS3, bucket, PRESIGN_TTL } from '@/lib/s3'
 
 /** DELETE /api/documents/[id] — remove document record and S3 object */
 export async function DELETE(
@@ -25,10 +21,9 @@ export async function DELETE(
 
   // Delete from S3 (best-effort)
   try {
-    await s3.deleteObject({
-      Bucket: process.env.AWS_S3_BUCKET!,
-      Key: doc.s3Key,
-    }).promise()
+    await getS3().send(
+      new DeleteObjectCommand({ Bucket: bucket(), Key: doc.s3Key })
+    )
   } catch {
     // Non-fatal — still remove the DB record
   }
@@ -51,11 +46,11 @@ export async function GET(
   const doc = await prisma.document.findUnique({ where: { id: params.id } })
   if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const url = s3.getSignedUrl('getObject', {
-    Bucket: process.env.AWS_S3_BUCKET,
-    Key: doc.s3Key,
-    Expires: 300,
-  })
+  const url = await getSignedUrl(
+    getS3(),
+    new GetObjectCommand({ Bucket: bucket(), Key: doc.s3Key }),
+    { expiresIn: PRESIGN_TTL }
+  )
 
   return NextResponse.json({ url })
 }

@@ -1,0 +1,45 @@
+# TLS is obtained automatically from Let's Encrypt, which requires the site
+# address to resolve to this instance's Elastic IP before the container starts.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# The assistant streams server-sent events. A buffering or compressing proxy
+	# turns that into a single lump delivered at the end, which is the most
+	# likely cause of "it streamed on Vercel and hangs on EC2". The route sets
+	# X-Accel-Buffering: no for nginx-style proxies; Caddy needs it stated here.
+	@sse path /api/assistant
+	handle @sse {
+		reverse_proxy app:3000 {
+			flush_interval -1
+			transport http {
+				# The agentic loop can run several model round trips. The
+				# platform default would cut a long answer off mid-sentence.
+				read_timeout 300s
+			}
+		}
+	}
+
+	# Exports and the cron endpoint do unbounded serial work and can outlast a
+	# default timeout on a backlog.
+	@slow path /api/reports/export* /api/mande/export* /api/cron/*
+	handle @slow {
+		reverse_proxy app:3000 {
+			transport http {
+				read_timeout 300s
+			}
+		}
+	}
+
+	handle {
+		reverse_proxy app:3000
+	}
+
+	header {
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

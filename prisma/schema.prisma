@@ -1,5 +1,10 @@
 generator client {
   provider = "prisma-client-js"
+  // The runtime target is Graviton (t4g) on Amazon Linux 2023, which is
+  // ARM64 with OpenSSL 3. Without this the generated client carries only the
+  // build host's engine and dies on first query with "Query engine binary for
+  // current platform linux-arm64-openssl-3.0.x could not be found".
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x"]
 }
 
 datasource db {

@@ -1,0 +1,86 @@
+# Runtime stack for the single-instance deployment.
+#
+# App, Postgres and Caddy on one t4g.small. The database is a container rather
+# than RDS to stay inside the cost target; the CDK is parameterised so switching
+# to managed RDS is a flag rather than a rebuild. Recoverability comes from a
+# nightly pg_dump to S3 plus daily EBS snapshots, NOT from this file.
+
+services:
+  app:
+    image: ${APP_IMAGE:-innovalanga-hub:latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      # Secrets are injected by the instance from Secrets Manager, never baked
+      # into the image or committed here.
+      DATABASE_URL: ${DATABASE_URL}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      CRON_SECRET: ${CRON_SECRET}
+      AWS_REGION: ${AWS_REGION:-af-south-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AI_PROVIDER: ${AI_PROVIDER:-bedrock}
+      AI_MODEL: ${AI_MODEL:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+    expose:
+      - '3000'
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://127.0.0.1:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # A 2 GiB box shared with Postgres and Caddy. Capping the app stops a
+    # runaway request taking the database down with it.
+    deploy:
+      resources:
+        limits:
+          memory: 1200M
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-innovalanga}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-innovalanga}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-innovalanga}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Not published to the host. The database is reachable only on the compose
+    # network, so it is never exposed to the internet.
+    expose:
+      - '5432'
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-hub.innovalanga.co.za}
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

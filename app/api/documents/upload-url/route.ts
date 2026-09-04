@@ -1,20 +1,15 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { z } from 'zod'
-import AWS from 'aws-sdk'
+import { PutObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { getS3, bucket, PRESIGN_TTL } from '@/lib/s3'
 import { randomUUID } from 'crypto'
 
 const schema = z.object({
   filename: z.string().min(1).max(255),
   contentType: z.string().min(1),
   innovatorId: z.string().min(1),
-})
-
-const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: process.env.AWS_REGION ?? 'af-south-1',
-  signatureVersion: 'v4',
 })
 
 /** POST /api/documents/upload-url — returns a presigned S3 PUT URL */
@@ -33,12 +28,11 @@ export async function POST(req: Request) {
   const ext = filename.split('.').pop() ?? 'bin'
   const s3Key = `innovators/${innovatorId}/documents/${randomUUID()}.${ext}`
 
-  const url = s3.getSignedUrl('putObject', {
-    Bucket: process.env.AWS_S3_BUCKET,
-    Key: s3Key,
-    ContentType: contentType,
-    Expires: 300, // 5 minutes
-  })
+  const url = await getSignedUrl(
+    getS3(),
+    new PutObjectCommand({ Bucket: bucket(), Key: s3Key, ContentType: contentType }),
+    { expiresIn: PRESIGN_TTL }
+  )
 
   return NextResponse.json({ url, s3Key })
 }
