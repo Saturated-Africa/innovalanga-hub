@@ -9,6 +9,7 @@ import type { Construct } from 'constructs'
 export interface SchedulerStackProps extends StackProps {
   siteAddress: string
   appSecret: secretsmanager.Secret
+  environment: 'sandbox' | 'production'
 }
 
 /**
@@ -31,13 +32,13 @@ export class SchedulerStack extends Stack {
     // provisions a custom resource whose role needs logs:* on Resource::*,
     // which is a wildcard worth avoiding for the sake of one setting.
     const logGroup = new logs.LogGroup(this, 'CronInvokerLogs', {
-      logGroupName: '/aws/lambda/innovalanga-cron-invoker',
+      logGroupName: `/aws/lambda/innovalanga-${props.environment}-cron-invoker`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: RemovalPolicy.DESTROY,
     })
 
     const fn = new lambda.Function(this, 'CronInvoker', {
-      functionName: 'innovalanga-cron-invoker',
+      functionName: `innovalanga-${props.environment}-cron-invoker`,
       description: 'Calls the Innovalanga Hub auto-complete endpoint on a schedule',
       runtime: lambda.Runtime.NODEJS_LATEST,
       // Graviton, consistent with the application host and cheaper per ms.
@@ -100,14 +101,16 @@ exports.handler = async () => {
     fn.grantInvoke(schedulerRole)
 
     new scheduler.CfnSchedule(this, 'AutoCompleteSchedule', {
-      name: 'innovalanga-auto-complete',
+      name: `innovalanga-${props.environment}-auto-complete`,
       description: 'Marks no shows and auto completes overdue sessions every 15 minutes',
       // The job has no locking, so two overlapping runs could double send
       // emails. A flexible window would allow exactly that, so it is off.
       flexibleTimeWindow: { mode: 'OFF' },
       scheduleExpression: 'cron(0/15 * * * ? *)',
       scheduleExpressionTimezone: 'Africa/Johannesburg',
-      state: 'ENABLED',
+      // Disabled in a sandbox: the job sends real email through Resend, and a
+      // test environment should not be messaging mentors every 15 minutes.
+      state: props.environment === 'production' ? 'ENABLED' : 'DISABLED',
       target: {
         arn: fn.functionArn,
         roleArn: schedulerRole.roleArn,

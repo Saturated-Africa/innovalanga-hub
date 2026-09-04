@@ -14,6 +14,7 @@ export interface AppStackProps extends StackProps {
   appSecret: secretsmanager.Secret
   siteAddress: string
   database: 'container' | 'rds'
+  environment: 'sandbox' | 'production'
   /** Bedrock inference profile the instance is allowed to invoke. */
   bedrockModelArnPattern: string
 }
@@ -38,13 +39,16 @@ export class AppStack extends Stack {
   constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props)
 
+    const prod = props.environment === 'production'
+
     /* ------------------------------------------------------------------ *
      * Container registry
      * ------------------------------------------------------------------ */
     this.repository = new ecr.Repository(this, 'Repository', {
-      repositoryName: 'innovalanga-hub',
+      repositoryName: `innovalanga-hub-${props.environment}`,
       imageScanOnPush: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: prod ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+      emptyOnDelete: !prod,
       lifecycleRules: [
         {
           description: 'Keep the ten most recent images',
@@ -150,9 +154,10 @@ export class AppStack extends Stack {
       role,
       userData,
       requireImdsv2: true,
-      // The containerised database lives on this instance's volume, so an
-      // accidental terminate is a data loss event, not just downtime.
-      disableApiTermination: true,
+      // In production the containerised database lives on this volume, so an
+      // accidental terminate is a data loss event. A sandbox must stay
+      // destroyable.
+      disableApiTermination: prod,
       // Basic (5 minute) monitoring only. Detailed monitoring bills per
       // instance per month and this host is deliberately low traffic.
       detailedMonitoring: false,
@@ -162,7 +167,9 @@ export class AppStack extends Stack {
           volume: ec2.BlockDeviceVolume.ebs(30, {
             volumeType: ec2.EbsDeviceVolumeType.GP3,
             encrypted: true,
-            deleteOnTermination: false,
+            // Keeping the volume after termination protects production data,
+            // but in a sandbox it leaves an orphaned volume billing quietly.
+            deleteOnTermination: !prod,
           }),
         },
       ],

@@ -23,6 +23,50 @@ Set the result as `AI_MODEL` in step 4.
 
 ## 1. Deploy the infrastructure
 
+### Sandbox first
+
+The stacks are environment-aware. **Sandbox is the default**, because the
+dangerous mistake is deploying production by accident, not the reverse.
+
+```bash
+cd infra
+npm install
+npx cdk bootstrap aws://SANDBOX_ACCOUNT_ID/af-south-1
+
+npx cdk deploy --all -c account=SANDBOX_ACCOUNT_ID
+```
+
+That creates `InnovalangaNetworkSandbox`, `InnovalangaDataSandbox`,
+`InnovalangaAppSandbox` and `InnovalangaSchedulerSandbox`. The sandbox differs
+from production in four deliberate ways:
+
+| | Sandbox | Production |
+|---|---|---|
+| Buckets, secrets, registry | Destroyed with the stack | Retained |
+| Termination protection | Off | On |
+| EBS volume on terminate | Deleted | Kept |
+| Cron schedule | **Disabled** | Every 15 minutes |
+
+The schedule is disabled in a sandbox on purpose: the job sends real email
+through Resend, and a test environment should not be messaging mentors.
+
+Tear it down completely when finished, which is the whole point of the sandbox
+settings:
+
+```bash
+npx cdk destroy --all -c account=SANDBOX_ACCOUNT_ID
+```
+
+Verified from the synthesised templates: the sandbox stacks retain **zero**
+resources, so nothing survives to bill quietly. Production retains four
+(documents, backups, secrets, registry).
+
+### Production
+
+Everything below assumes production. Add `-c environment=production` to every
+command, and note the stack names lose the `Sandbox` suffix.
+
+
 ```bash
 cd infra
 npm install

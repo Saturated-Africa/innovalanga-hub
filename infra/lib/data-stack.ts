@@ -8,6 +8,12 @@ import type { Construct } from 'constructs'
 export interface DataStackProps extends StackProps {
   vpc: ec2.Vpc
   /**
+   * 'production' protects everything from deletion. 'sandbox' makes the whole
+   * environment disposable so `cdk destroy` actually works and a test
+   * environment cannot quietly bill forever.
+   */
+  environment: 'sandbox' | 'production'
+  /**
    * 'container' runs Postgres on the application instance. 'rds' provisions a
    * managed database with automated backups and point in time recovery.
    *
@@ -33,7 +39,15 @@ export class DataStack extends Stack {
   public readonly database?: rds.DatabaseInstance
 
   constructor(scope: Construct, id: string, props: DataStackProps) {
-    super(scope, id, { ...props, terminationProtection: true })
+    const prod = props.environment === 'production'
+
+    super(scope, id, { ...props, terminationProtection: prod })
+
+    // In production these resources outlive their stack. In a sandbox they must
+    // not: a retained bucket or an un-deletable database turns a test
+    // environment into a recurring charge nobody remembers creating.
+    const retention = prod ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY
+    const autoDelete = !prod
 
     /* ------------------------------------------------------------------ *
      * Document store. Holds ID documents and proof of address, so it is
@@ -45,7 +59,8 @@ export class DataStack extends Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
       versioned: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: retention,
+      autoDeleteObjects: autoDelete,
       // The browser PUTs directly to S3 using a presigned URL, so the bucket
       // itself must allow the app origin. Without this, uploads fail in the
       // browser with an opaque CORS error rather than a useful message.
@@ -77,7 +92,8 @@ export class DataStack extends Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
       versioned: false,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: retention,
+      autoDeleteObjects: autoDelete,
       lifecycleRules: [
         {
           // Thirty days of nightly dumps, then transition the tail to cheaper
@@ -105,9 +121,9 @@ export class DataStack extends Stack {
      * by hand in the console after the first deploy.
      * ------------------------------------------------------------------ */
     this.appSecret = new secretsmanager.Secret(this, 'AppSecret', {
-      secretName: 'innovalanga/app',
+      secretName: `innovalanga/${props.environment}/app`,
       description: 'Runtime secrets for the Innovalanga Hub application',
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: retention,
       generateSecretString: {
         // NEXTAUTH_SECRET and CRON_SECRET are generated here so no human ever
         // handles them. ENCRYPTION_KEY is NOT generated: it must match the key
@@ -154,9 +170,9 @@ export class DataStack extends Stack {
         // requires an availability guarantee.
         multiAz: false,
         backupRetention: Duration.days(7),
-        deleteAutomatedBackups: false,
-        deletionProtection: true,
-        removalPolicy: RemovalPolicy.RETAIN,
+        deleteAutomatedBackups: !prod,
+        deletionProtection: prod,
+        removalPolicy: retention,
         publiclyAccessible: false,
         credentials: rds.Credentials.fromGeneratedSecret('innovalanga', {
           secretName: 'innovalanga/database',

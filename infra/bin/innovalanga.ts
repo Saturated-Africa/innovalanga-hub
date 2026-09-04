@@ -20,7 +20,27 @@ const account = app.node.tryGetContext('account') ?? process.env.CDK_DEFAULT_ACC
 const region = app.node.tryGetContext('region') ?? 'af-south-1'
 const env = { account, region }
 
-const siteAddress = app.node.tryGetContext('siteAddress') ?? 'hub.innovalanga.co.za'
+/**
+ * 'sandbox' makes the whole environment disposable: buckets empty on delete,
+ * no termination protection, no deletion protection. Without that a test
+ * environment cannot be torn down and bills indefinitely.
+ *
+ *   npx cdk deploy --all -c environment=sandbox
+ */
+const environment: 'sandbox' | 'production' =
+  app.node.tryGetContext('environment') === 'production' ? 'production' : 'sandbox'
+
+const isProd = environment === 'production'
+
+/**
+ * Stack names carry the environment so a sandbox and a production deployment
+ * can sit in the same account without colliding.
+ */
+const stackName = (base: string) => `Innovalanga${base}${isProd ? '' : 'Sandbox'}`
+
+const siteAddress =
+  app.node.tryGetContext('siteAddress') ??
+  (isProd ? 'hub.innovalanga.co.za' : 'sandbox.innovalanga.co.za')
 
 /**
  * 'container' keeps Postgres on the application instance, which is what fits
@@ -49,16 +69,17 @@ const bedrockModelArnPattern =
 /* -------------------------------------------------------------------------- *
  * Stacks
  * -------------------------------------------------------------------------- */
-const network = new NetworkStack(app, 'InnovalangaNetwork', { env })
+const network = new NetworkStack(app, stackName('Network'), { env })
 
-const data = new DataStack(app, 'InnovalangaData', {
+const data = new DataStack(app, stackName('Data'), {
   env,
   vpc: network.vpc,
+  environment,
   database,
   siteAddress,
 })
 
-const appStack = new AppStack(app, 'InnovalangaApp', {
+const appStack = new AppStack(app, stackName('App'), {
   env,
   vpc: network.vpc,
   documents: data.documents,
@@ -66,13 +87,15 @@ const appStack = new AppStack(app, 'InnovalangaApp', {
   appSecret: data.appSecret,
   siteAddress,
   database,
+  environment,
   bedrockModelArnPattern,
 })
 
-const scheduler = new SchedulerStack(app, 'InnovalangaScheduler', {
+const scheduler = new SchedulerStack(app, stackName('Scheduler'), {
   env,
   siteAddress,
   appSecret: data.appSecret,
+  environment,
 })
 
 /**
@@ -84,7 +107,7 @@ const scheduler = new SchedulerStack(app, 'InnovalangaScheduler', {
  * accidentally start a GPU instance.
  */
 if (app.node.tryGetContext('ollama') === 'true') {
-  const ollama = new OllamaStack(app, 'InnovalangaOllama', {
+  const ollama = new OllamaStack(app, stackName('Ollama'), {
     env,
     vpc: network.vpc,
     appSecurityGroup: appStack.securityGroup,
@@ -111,6 +134,7 @@ if (app.node.tryGetContext('ollama') === 'true') {
 Tags.of(app).add('Project', 'Innovalanga Hub')
 Tags.of(app).add('Owner', 'Saturated Africa')
 Tags.of(app).add('ManagedBy', 'CDK')
+Tags.of(app).add('Environment', environment)
 
 Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }))
 
@@ -149,6 +173,16 @@ NagSuppressions.addStackSuppressions(appStack, [
       'Detailed (one minute) monitoring is off. It bills per instance per month and this is a deliberately low traffic single host. Basic five minute metrics are sufficient to see the instance is alive.',
   },
 ])
+
+if (!isProd) {
+  NagSuppressions.addStackSuppressions(appStack, [
+    {
+      id: 'AwsSolutions-EC29',
+      reason:
+        'Termination protection is deliberately off in a sandbox. It is enabled in production, where the containerised database lives on this volume. A sandbox that cannot be destroyed bills forever, which is the larger risk in a test environment.',
+    },
+  ])
+}
 
 NagSuppressions.addStackSuppressions(scheduler, [
   {
