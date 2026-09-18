@@ -21,7 +21,9 @@ platform.
 
 ## Tech stack
 
-- **Framework:** Next.js 14 (App Router), TypeScript
+- **Framework:** Next.js 16 (App Router), TypeScript. `params` and `searchParams`
+  are promises - await them. Route protection lives in `proxy.ts`, which is the
+  Next 16 name for what used to be `middleware.ts`.
 - **Styling:** Tailwind CSS, shadcn/ui
 - **Database:** PostgreSQL via Prisma ORM
 - **Auth:** NextAuth.js (role-based)
@@ -236,7 +238,7 @@ CRON_SECRET
 ## Build phases — work in this order
 
 ### Phase 1 — Foundation
-- Scaffold Next.js 14 with TypeScript, Tailwind, shadcn/ui
+- Scaffold Next.js with TypeScript, Tailwind, shadcn/ui
 - Set up Prisma schema with all models; run migration
 - Seed: 2 cohorts, 5 innovators, 3 mentors, 3 assessments per innovator,
   sample bookings (mix of statuses), sample stipend records
