@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { buildICalFeed } from '@/lib/ical'
 
-interface Params { params: { mentorId: string } }
+interface Params { params: Promise<{ mentorId: string }> }
 
 // GET /api/calendar/[mentorId]?token=xxx  — iCal feed (unauthenticated, protected by token)
-export async function GET(req: Request, { params }: Params) {
+export async function GET(req: Request, props: Params) {
+  const params = await props.params;
   const { searchParams } = new URL(req.url)
   const token = searchParams.get('token')
 

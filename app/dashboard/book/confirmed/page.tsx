@@ -7,14 +7,15 @@ import { CheckCircle2, Calendar, Clock, Download } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface Props {
-  searchParams: { bookingId?: string }
+  searchParams: Promise<{ bookingId?: string }>
 }
 
 function toSAST(d: Date): Date {
   return new Date(d.getTime() + 2 * 60 * 60 * 1000)
 }
 
-export default async function BookingConfirmedPage({ searchParams }: Props) {
+export default async function BookingConfirmedPage(props: Props) {
+  const searchParams = await props.searchParams;
   const session = await getSession()
   if (!session) redirect('/login')
 

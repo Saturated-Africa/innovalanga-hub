@@ -13,10 +13,8 @@ import { safeDisplayName } from '@/lib/uploads'
  */
 
 /** DELETE /api/documents/[id] - remove the record and the stored object. */
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!['super_admin', 'facilitator'].includes(session.user.role)) {
@@ -47,10 +45,8 @@ export async function DELETE(
 }
 
 /** GET /api/documents/[id] - return a presigned download URL. */
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!['super_admin', 'facilitator'].includes(session.user.role)) {

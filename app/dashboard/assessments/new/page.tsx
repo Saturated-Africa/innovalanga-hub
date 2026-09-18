@@ -5,10 +5,11 @@ import { AssessmentForm } from './AssessmentForm'
 import { PageHeader } from '@/components/shared/PageHeader'
 
 interface Props {
-  searchParams: { innovatorId?: string }
+  searchParams: Promise<{ innovatorId?: string }>
 }
 
-export default async function NewAssessmentPage({ searchParams }: Props) {
+export default async function NewAssessmentPage(props: Props) {
+  const searchParams = await props.searchParams;
   const session = await getSession()
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')

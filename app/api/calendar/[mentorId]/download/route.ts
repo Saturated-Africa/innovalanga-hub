@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { buildSingleICalEvent } from '@/lib/ical'
 import { resolveProgrammeId } from '@/lib/scope'
 
-interface Params { params: { mentorId: string } }
+interface Params { params: Promise<{ mentorId: string }> }
 
 /**
  * GET /api/calendar/[mentorId]/download?bookingId=xxx
@@ -20,7 +20,8 @@ interface Params { params: { mentorId: string } }
  * clients cannot carry a session cookie. This route is fetched by the browser
  * from a page the user is already signed in to, so it uses the session.
  */
-export async function GET(req: Request, { params }: Params) {
+export async function GET(req: Request, props: Params) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return new NextResponse('Unauthorized', { status: 401 })
 

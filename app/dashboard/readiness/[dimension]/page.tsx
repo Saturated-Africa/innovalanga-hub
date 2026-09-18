@@ -51,11 +51,12 @@ function scoreOf(
   return a.mrlScore
 }
 
-export default async function ReadinessTrackerPage({
-  params,
-}: {
-  params: { dimension: string }
-}) {
+export default async function ReadinessTrackerPage(
+  props: {
+    params: Promise<{ dimension: string }>
+  }
+) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator', 'funder_viewer'].includes(session.user.role)) {

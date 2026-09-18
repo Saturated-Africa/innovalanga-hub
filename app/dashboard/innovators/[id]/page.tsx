@@ -19,10 +19,11 @@ import { REC_CONFIG, STATUS_CONFIG } from '@/lib/ip-engine'
 import { IP_RECOMMENDATION_VARIANT } from '@/lib/status-colors'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
-export default async function InnovatorProfilePage({ params }: Props) {
+export default async function InnovatorProfilePage(props: Props) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')

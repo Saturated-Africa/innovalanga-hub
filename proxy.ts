@@ -6,12 +6,16 @@ import { sessionCookieName } from '@/lib/session-cookie'
 /**
  * Server-side route protection.
  *
+ * Named proxy.ts rather than middleware.ts: Next 16 renamed the convention and
+ * warns on the old name. The behaviour is unchanged - this still runs before
+ * every matched request - and `withAuth` is still what decides.
+ *
  * The rules live in `lib/route-access.ts` so they can be tested without
  * standing up NextAuth or Next.js. See that file for why a plain
  * `startsWith` prefix test was the wrong comparison.
  */
 export default withAuth(
-  function middleware(req) {
+  function proxy(req) {
     const token = req.nextauth.token
     if (!token) {
       return NextResponse.redirect(new URL('/login', req.url))

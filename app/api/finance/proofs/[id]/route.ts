@@ -12,10 +12,8 @@ import { tenantScope } from '@/lib/tenant-db'
  * needs the evidence to still exist even where the link has been withdrawn.
  * Revoking closes the door without destroying what was behind it.
  */
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (session.user.role !== 'super_admin') {

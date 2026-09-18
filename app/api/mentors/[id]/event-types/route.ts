@@ -16,9 +16,10 @@ const schema = z.object({
   active: z.boolean().optional().default(true),
 })
 
-interface Params { params: { id: string } }
+interface Params { params: Promise<{ id: string }> }
 
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(_req: Request, props: Params) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -34,7 +35,8 @@ export async function GET(_req: Request, { params }: Params) {
   return NextResponse.json(eventTypes)
 }
 
-export async function POST(req: Request, { params }: Params) {
+export async function POST(req: Request, props: Params) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -61,7 +63,8 @@ export async function POST(req: Request, { params }: Params) {
   return NextResponse.json(eventType, { status: 201 })
 }
 
-export async function PATCH(req: Request, { params }: Params) {
+export async function PATCH(req: Request, props: Params) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -94,7 +97,8 @@ export async function PATCH(req: Request, { params }: Params) {
   return NextResponse.json(updated)
 }
 
-export async function DELETE(req: Request, { params }: Params) {
+export async function DELETE(req: Request, props: Params) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

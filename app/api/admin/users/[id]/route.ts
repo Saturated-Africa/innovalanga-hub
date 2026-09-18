@@ -27,10 +27,8 @@ async function wouldRemoveLastAdmin(targetId: string): Promise<boolean> {
   return admins <= 1
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session || session.user.role !== 'super_admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -81,10 +79,8 @@ export async function PATCH(
   return NextResponse.json(updated)
 }
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session || session.user.role !== 'super_admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

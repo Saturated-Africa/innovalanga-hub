@@ -13,10 +13,11 @@ import { ArrowLeft } from 'lucide-react'
 import { CohortInnovatorsTable } from './CohortInnovatorsTable'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
-export default async function CohortDetailPage({ params }: Props) {
+export default async function CohortDetailPage(props: Props) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')

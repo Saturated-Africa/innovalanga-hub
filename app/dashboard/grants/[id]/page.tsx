@@ -24,7 +24,8 @@ import { TrancheSchedule } from '@/components/funds/TrancheSchedule'
 
 const VIEWERS = ['super_admin', 'facilitator', 'funder_viewer']
 
-export default async function GrantPage({ params }: { params: { id: string } }) {
+export default async function GrantPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) redirect('/login')
   if (!VIEWERS.includes(session.user.role)) redirect('/dashboard')

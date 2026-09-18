@@ -17,7 +17,8 @@ function yesNo(v: boolean | null): string {
   return ''
 }
 
-export default async function BeneficiaryPage({ params }: { params: { id: string } }) {
+export default async function BeneficiaryPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')

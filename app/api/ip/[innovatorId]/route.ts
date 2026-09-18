@@ -67,10 +67,8 @@ async function guard(
   return (await innovatorInProgramme(innovatorId, programmeId)) ? { db } : { status: 404 }
 }
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { innovatorId: string } }
-) {
+export async function GET(_req: Request, props: { params: Promise<{ innovatorId: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -94,10 +92,8 @@ const SubmitSchema = z.object({
  * POST /api/ip/[innovatorId]
  * Submit questionnaire answers - runs the engine, upserts the assessment.
  */
-export async function POST(
-  req: Request,
-  { params }: { params: { innovatorId: string } }
-) {
+export async function POST(req: Request, props: { params: Promise<{ innovatorId: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -151,10 +147,8 @@ const PatchSchema = z.object({
  * PATCH /api/ip/[innovatorId]
  * An adviser adds notes or moves the protection status on.
  */
-export async function PATCH(
-  req: Request,
-  { params }: { params: { innovatorId: string } }
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ innovatorId: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

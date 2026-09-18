@@ -19,7 +19,8 @@ import { FundAdmin } from '@/components/funds/FundAdmin'
  * Platform level, on the owning connection, for the same reason as the register
  * it came from: a fund is not owned by any one programme.
  */
-export default async function FundPage({ params }: { params: { id: string } }) {
+export default async function FundPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) redirect('/login')
   if (session.user.role !== 'super_admin') redirect('/dashboard')

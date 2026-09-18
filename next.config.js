@@ -47,9 +47,11 @@ const nextConfig = {
   // Do not advertise the framework version to every caller.
   poweredByHeader: false,
 
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client', 'bcryptjs'],
-  },
+  // Prisma and bcrypt are native and must not be bundled into the server build.
+  // This left `experimental` in Next 15 and is now a top-level option; the old
+  // key is silently ignored, which would have bundled them again without
+  // anything failing until something native was loaded at runtime.
+  serverExternalPackages: ['@prisma/client', 'bcryptjs'],
 
   // `next/image` is not used anywhere in the app, and documents are served from
   // S3 through short-lived presigned URLs rather than the optimiser. Disabling

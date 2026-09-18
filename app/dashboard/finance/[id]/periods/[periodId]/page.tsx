@@ -32,11 +32,12 @@ const field = (value: { toString(): string } | null) => (value === null ? '' : S
 const dateField = (value: Date | null) =>
   value === null ? '' : value.toISOString().slice(0, 10)
 
-export default async function PeriodPage({
-  params,
-}: {
-  params: { id: string; periodId: string }
-}) {
+export default async function PeriodPage(
+  props: {
+    params: Promise<{ id: string; periodId: string }>
+  }
+) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) redirect('/login')
   if (session.user.role !== 'super_admin') redirect('/dashboard')

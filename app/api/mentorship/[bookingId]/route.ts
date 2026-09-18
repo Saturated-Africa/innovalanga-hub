@@ -19,10 +19,8 @@ const schema = z.object({
  * through the shared booking predicate, which answers ownership for a mentor
  * and tenancy for an administrator.
  */
-export async function PATCH(
-  req: Request,
-  { params }: { params: { bookingId: string } }
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ bookingId: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!['super_admin', 'mentor'].includes(session.user.role)) {

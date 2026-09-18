@@ -27,10 +27,8 @@ const schema = z.object({
   cohortId: z.string().nullable().optional(),
 })
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!['super_admin', 'facilitator'].includes(session.user.role)) {
@@ -72,10 +70,8 @@ export async function PATCH(
   return NextResponse.json(indicator)
 }
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!['super_admin', 'facilitator'].includes(session.user.role)) {

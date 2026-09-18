@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
 interface Props {
-  params: { userId: string }
+  params: Promise<{ userId: string }>
 }
 
-export default async function SetupInnovatorPage({ params }: Props) {
+export default async function SetupInnovatorPage(props: Props) {
+  const params = await props.params;
   const session = await getSession()
   if (!session || !['super_admin', 'facilitator'].includes(session.user.role)) {
     redirect('/dashboard')

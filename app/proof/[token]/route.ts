@@ -28,10 +28,8 @@ import { safeDisplayName } from '@/lib/uploads'
  * Deliberately unauthenticated. A funder has no account here, and requiring one
  * would defeat the purpose of putting the link in the file.
  */
-export async function GET(
-  _req: Request,
-  { params }: { params: { token: string } }
-) {
+export async function GET(_req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   // Reject anything that is not token-shaped before touching the database.
   if (!/^[A-Za-z0-9_-]{32,128}$/.test(params.token)) {
     return new NextResponse('Not found', { status: 404 })

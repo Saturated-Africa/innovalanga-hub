@@ -20,7 +20,8 @@ const CATEGORY_LABEL: Record<string, string> = {
   Consumables: 'Consumables',
 }
 
-export default async function FinanceProjectPage({ params }: { params: { id: string } }) {
+export default async function FinanceProjectPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) redirect('/login')
   if (session.user.role !== 'super_admin') redirect('/dashboard')

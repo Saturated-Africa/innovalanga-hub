@@ -28,7 +28,8 @@ const RecordSchema = z.object({
 const READERS = ['super_admin', 'facilitator', 'funder_viewer']
 const WRITERS = ['super_admin', 'facilitator']
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!READERS.includes(session.user.role)) {
@@ -51,7 +52,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return NextResponse.json(records)
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!WRITERS.includes(session.user.role)) {
@@ -92,7 +94,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   return NextResponse.json(record, { status: 201 })
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!WRITERS.includes(session.user.role)) {

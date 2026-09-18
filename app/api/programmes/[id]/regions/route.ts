@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { assertProgrammeInScope } from '@/lib/scope'
 
-interface Params { params: { id: string } }
+interface Params { params: Promise<{ id: string }> }
 
 /**
  * The regions one programme operates in.
@@ -11,7 +11,8 @@ interface Params { params: { id: string } }
  * Same shape, and same gap, as the periods route beside it: the programme came
  * from the path and was never checked against the caller.
  */
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(_req: Request, props: Params) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

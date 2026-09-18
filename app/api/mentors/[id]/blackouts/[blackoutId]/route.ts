@@ -5,8 +5,9 @@ import { canManageMentorSchedule } from '@/lib/authz'
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string; blackoutId: string } }
+  props: { params: Promise<{ id: string; blackoutId: string }> }
 ) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

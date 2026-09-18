@@ -40,8 +40,9 @@ const MAY_PAY = ['super_admin']
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string; trancheId: string } }
+  props: { params: Promise<{ id: string; trancheId: string }> }
 ) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!MAY_APPROVE.includes(session.user.role)) {

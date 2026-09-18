@@ -5,10 +5,11 @@ import { BookingWizard } from './BookingWizard'
 import { PageHeader } from '@/components/shared/PageHeader'
 
 interface Props {
-  params: { mentorSlug: string }
+  params: Promise<{ mentorSlug: string }>
 }
 
-export default async function BookMentorPage({ params }: Props) {
+export default async function BookMentorPage(props: Props) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) redirect('/login')
   if (session.user.role !== 'innovator') redirect('/dashboard')
