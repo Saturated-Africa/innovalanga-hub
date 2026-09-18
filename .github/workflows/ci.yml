@@ -1,0 +1,84 @@
+name: CI
+
+# There was no CI of any kind on this repository, so nothing checked types,
+# tests or dependency advisories before a change reached the deployed instance.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  schedule:
+    # Advisories are published against code that has not changed, so the audit
+    # runs weekly as well as on push.
+    - cron: '0 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the secret scan below has something to compare.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # The test glob is recursive. It was not, so tests added under a
+      # subdirectory of lib/ ran nowhere and reported nothing - including in CI.
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # Build-time only. The real values are injected at runtime from
+          # Secrets Manager and never exist in CI.
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+          NEXTAUTH_SECRET: build-time-placeholder-value-not-a-secret
+          ENCRYPTION_KEY: build-time-placeholder-0000000000000000000000000000
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      # Fails the build on high or critical advisories. Moderate and low are
+      # reported without blocking, so the signal stays meaningful.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+      - name: Report all advisories
+        if: always()
+        run: npm audit || true
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan history for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
