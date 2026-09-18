@@ -1,6 +1,5 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,7 +7,7 @@ import { DataTable } from '@/components/shared/DataTable'
 import { formatDate } from '@/lib/utils'
 import { UserPlus } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { resolveProgrammeId } from '@/lib/scope'
+import { tenantScope } from '@/lib/tenant-db'
 import { InnovatorsTable } from './InnovatorsTable'
 
 export default async function InnovatorsPage() {
@@ -16,8 +15,11 @@ export default async function InnovatorsPage() {
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')
 
-  const programmeId = await resolveProgrammeId(session)
-  if (!programmeId) redirect('/dashboard')
+  const scope = await tenantScope(session)
+  if (!scope) redirect('/dashboard')
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
 
   const innovators = await prisma.innovatorProfile.findMany({
     where: { cohort: { programmeId } },

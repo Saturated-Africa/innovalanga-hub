@@ -21,7 +21,11 @@ export async function GET(req: Request, { params }: Params) {
       status: { in: ['Confirmed', 'InProgress', 'Completed', 'Rescheduled'] },
     },
     include: {
-      innovator: true,
+      // Was `innovator: true`, which pulled the full profile - phone number and
+      // encrypted ID number included - into a feed that only ever renders a
+      // name. This route is reached with a bearer token in a URL, so it is the
+      // last place that should over-fetch.
+      innovator: { select: { firstName: true, lastName: true, businessName: true } },
       eventType: true,
     },
     orderBy: { scheduledStart: 'desc' },

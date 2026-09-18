@@ -1,6 +1,6 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
+import { tenantScope } from '@/lib/tenant-db'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,7 +23,16 @@ export default async function AssessmentsPage() {
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')
 
+  const scope = await tenantScope(session)
+  if (!scope) redirect('/dashboard')
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+
+  // Unscoped before this: every assessment on the platform, with the
+  // participant's name and business attached.
   const assessments = await prisma.assessment.findMany({
+    where: { innovator: { cohort: { programmeId } } },
     include: {
       innovator: { select: { firstName: true, lastName: true, businessName: true } },
     },

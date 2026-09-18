@@ -1,6 +1,6 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
+import { tenantScope } from '@/lib/tenant-db'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,31 +15,39 @@ export default async function IPDashboardPage() {
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')
 
-  // Resolve programme
-  let programmeId = session.user.programmeId ?? null
-  if (!programmeId) {
-    const first = await prisma.programme.findFirst({ orderBy: { createdAt: 'asc' }, select: { id: true, moduleIPEnabled: true } })
-    programmeId = first?.id ?? null
-    if (!first?.moduleIPEnabled) {
-      return (
-        <div className="flex flex-col items-center justify-center h-64 gap-3">
-          <p className="text-muted-foreground font-medium">IP Protection module is not enabled for this programme.</p>
-          <p className="text-sm text-muted-foreground">Enable it in Admin → Programme Settings.</p>
-        </div>
-      )
-    }
+  const scope = await tenantScope(session)
+  if (!scope) redirect('/dashboard')
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+
+  // Checked for whichever programme the caller is actually on. This used to sit
+  // inside the branch that ran only when the account had no programme of its
+  // own, so a facilitator assigned to a programme with the module switched off
+  // saw the module anyway.
+  const programme = await prisma.programme.findUnique({
+    where: { id: programmeId },
+    select: { moduleIPEnabled: true },
+  })
+  if (!programme?.moduleIPEnabled) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <p className="text-muted-foreground font-medium">IP Protection module is not enabled for this programme.</p>
+        <p className="text-sm text-muted-foreground">Enable it in Admin → Programme Settings.</p>
+      </div>
+    )
   }
 
   // All innovators in programme
   const [allInnovators, assessments] = await Promise.all([
     prisma.innovatorProfile.findMany({
-      where: { cohort: { programmeId: programmeId ?? undefined } },
+      where: { cohort: { programmeId } },
       select: { id: true, firstName: true, lastName: true, businessName: true, cohort: { select: { name: true } } },
       orderBy: { lastName: 'asc' },
     }),
     prisma.iPAssessment.findMany({
       where: {
-        innovator: { cohort: { programmeId: programmeId ?? undefined } },
+        innovator: { cohort: { programmeId } },
       },
       include: {
         innovator: {

@@ -76,14 +76,18 @@ export default async function AdminPage() {
         ))}
       </div>
 
-      {/* Pending innovator setup */}
+      {/* Pending innovator setup.
+          `bg-warning/10/40` carried two opacity modifiers, which Tailwind
+          cannot parse - the card rendered with no background at all. The icon
+          also used a raw palette colour instead of the warning token. */}
       {pendingSetup.length > 0 && (
-        <Card className="border-warning/25 bg-warning/10/40">
+        <Card className="border-warning/25 bg-warning/10">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertCircle className="h-4 w-4 text-warning" />
               <CardTitle className="text-base text-warning">
-                {pendingSetup.length} innovator{pendingSetup.length !== 1 ? 's' : ''} need profile setup
+                {pendingSetup.length} innovator{pendingSetup.length !== 1 ? 's' : ''}{' '}
+                {pendingSetup.length === 1 ? 'needs' : 'need'} profile setup
               </CardTitle>
             </div>
           </CardHeader>

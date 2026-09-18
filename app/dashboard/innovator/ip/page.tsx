@@ -102,6 +102,9 @@ export default function InnovatorIPPage() {
   // Show result
   if (assessment && !started) {
     const cfg = REC_CONFIG[assessment.primaryRec]
+    const applicableTypes = assessment.recommendations.filter(
+      (r) => r !== 'MultipleProtection'
+    )
     const statusCfg = STATUS_CONFIG[assessment.status]
     return (
       <div className="space-y-6 max-w-2xl">
@@ -123,12 +126,16 @@ export default function InnovatorIPPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* All recommendation types */}
-            {assessment.recommendations.length > 1 && (
+            {/* All recommendation types.
+                `MultipleProtection` is a summary label, not a protection type.
+                The engine no longer emits it into this array, but assessments
+                saved before that fix still carry it, so it is filtered here
+                too rather than migrated out of the database. */}
+            {applicableTypes.length > 1 && (
               <div>
                 <p className="text-sm font-medium mb-2">All applicable protection types:</p>
                 <div className="flex flex-wrap gap-2">
-                  {assessment.recommendations.map((r) => (
+                  {applicableTypes.map((r) => (
                     <Badge key={r} variant={IP_RECOMMENDATION_VARIANT[r] ?? 'muted'}>
                       {REC_CONFIG[r]?.label ?? r}
                     </Badge>

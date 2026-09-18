@@ -8,6 +8,7 @@ import { formatDateTime, formatDuration } from '@/lib/utils'
 import Link from 'next/link'
 import { CalendarPlus } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { CancelBookingButton } from '@/components/dashboard/CancelBookingButton'
 
 export default async function InnovatorSessionsPage() {
   const session = await getSession()
@@ -80,7 +81,18 @@ export default async function InnovatorSessionsPage() {
                         </a>
                       )}
                     </div>
-                    <BookingStatusBadge status={b.status} />
+                    <div className="flex flex-col items-end gap-2">
+                      <BookingStatusBadge status={b.status} />
+                      {/* Confirmed bookings block re-booking, so the innovator
+                          needs a way to release one. In-progress sessions are
+                          the mentor's to end, not the innovator's. */}
+                      {b.status === 'Confirmed' && (
+                        <CancelBookingButton
+                          bookingId={b.id}
+                          scheduledStart={b.scheduledStart.toISOString()}
+                        />
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>

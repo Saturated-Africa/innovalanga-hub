@@ -184,7 +184,8 @@ export function AssessmentForm({
         irlJustification,
         mrlJustification,
         dropJustification: needsDropJustification ? dropJustification : undefined,
-        assessedBy: assessorName,
+        // Not sent. The server records the signed-in user as the assessor, so
+        // the name on a locked score is the person who submitted it.
       }),
     })
 
@@ -365,7 +366,7 @@ export function AssessmentForm({
         </div>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={submitting}>
           {submitting ? (
             <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
@@ -376,6 +377,12 @@ export function AssessmentForm({
         <Button type="button" variant="outline" onClick={() => router.back()}>
           Cancel
         </Button>
+        {/* The server records the signed-in user as the assessor. Shown here so
+            the name on a score that cannot be edited afterwards is not a
+            surprise. */}
+        <span className="text-xs text-muted-foreground">
+          Recorded as assessed by {assessorName}. This cannot be edited once saved.
+        </span>
       </div>
     </form>
   )

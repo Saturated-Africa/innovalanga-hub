@@ -3,6 +3,7 @@
 import { DataTable } from '@/components/shared/DataTable'
 import { StipendStatusBadge } from '@/components/shared/StipendStatusBadge'
 import { RecalculateStipendButton } from '@/components/dashboard/RecalculateStipendButton'
+import { StipendProofButton } from '@/components/dashboard/StipendProofButton'
 import type { StipendStatus } from '@prisma/client'
 
 /** See InnovatorsTable for why the columns live in a client component. */
@@ -15,6 +16,7 @@ export interface StipendRow {
   status: string
   paidAt: string
   _stipendId: string
+  _proofs: { id: string; filename: string; shareToken: string }[]
 }
 
 export function StipendsTable({ rows }: { rows: StipendRow[] }) {
@@ -36,6 +38,18 @@ export function StipendsTable({ rows }: { rows: StipendRow[] }) {
           render: (row) => <StipendStatusBadge status={row.status as StipendStatus} />,
         },
         { key: 'paidAt', label: 'Paid Date' },
+        {
+          key: '_proofs',
+          label: 'Proof',
+          render: (row) => (
+            <StipendProofButton
+              stipendId={row._stipendId}
+              innovator={row.innovator}
+              proofs={row._proofs}
+              paidAt={row.paidAt === '—' ? null : row.paidAt}
+            />
+          ),
+        },
         {
           key: '_stipendId',
           label: '',

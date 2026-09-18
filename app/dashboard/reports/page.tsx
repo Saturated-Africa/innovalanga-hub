@@ -1,15 +1,15 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import Link from 'next/link'
 import { formatCurrency } from '@/lib/utils'
 import { CohortProgressChart } from './CohortProgressChart'
 import { Download } from 'lucide-react'
 import { BOOKING_STATUS, statusMeta } from '@/lib/status-colors'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { resolveProgrammeId } from '@/lib/scope'
+import { tenantScope } from '@/lib/tenant-db'
 
 export default async function ReportsPage() {
   const session = await getSession()
@@ -18,9 +18,14 @@ export default async function ReportsPage() {
 
   // Every count below used to be programme-wide across the whole database, so
   // a facilitator on one programme saw another funder's totals.
-  const programmeId = await resolveProgrammeId(session)
-  if (!programmeId) redirect('/dashboard')
+  const scope = await tenantScope(session)
+  if (!scope) redirect('/dashboard')
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
   const innovatorScope = { cohort: { programmeId } }
+
+  const canExport = session.user.role !== 'funder_viewer'
 
   const [
     totalInnovators,
@@ -92,16 +97,27 @@ export default async function ReportsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
       <PageHeader title="Programme Reports" description="Programme Performance — Key Indicators" />
-        <div className="flex items-center gap-2 flex-wrap">
-          {(['innovators', 'assessments', 'sessions', 'stipends'] as const).map((type) => (
-            <Button key={type} variant="outline" size="sm" asChild>
-              <a href={`/api/reports/export?type=${type}`} download>
-                <Download className="h-3.5 w-3.5 mr-1.5" />
-                {type.charAt(0).toUpperCase() + type.slice(1)}
-              </a>
-            </Button>
-          ))}
-        </div>
+        {/* Every one of these exports is person-level, so the API refuses a
+            funder outright. Rendering the buttons anyway gave funders four
+            controls that could only ever fail - QA logged them as working
+            downloads and "inspected" files that never arrived. */}
+        {canExport ? (
+          <div className="flex items-center gap-2 flex-wrap">
+            {(['innovators', 'assessments', 'sessions', 'stipends'] as const).map((type) => (
+              <Button key={type} variant="outline" size="sm" asChild>
+                <a href={`/api/reports/export?type=${type}`} download>
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </a>
+              </Button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground max-w-[22rem] text-right">
+            Funder access is aggregate only. The figures on this page may be
+            shared; per participant exports are not available.
+          </p>
+        )}
       </div>
 
       {/* KPI Grid */}
@@ -112,7 +128,7 @@ export default async function ReportsPage() {
           { label: 'Sessions Completed', value: completedSessions, color: 'text-foreground' },
           {
             label: 'Stipends Disbursed',
-            value: formatCurrency(totalStipendsPaid._sum.amount ?? 0),
+            value: formatCurrency(Number(totalStipendsPaid._sum.amount ?? 0)),
             color: 'text-warning',
           },
         ].map((kpi) => (
@@ -139,7 +155,20 @@ export default async function ReportsPage() {
                 return (
                   <div key={c.id} className="border rounded-lg p-3">
                     <div className="flex justify-between mb-2">
-                      <span className="font-medium text-sm">{c.name}</span>
+                      {/* These rows read as buttons - bordered, padded, rounded -
+                          but carried no link, so clicking them did nothing. Roles
+                          that can open a cohort now get a real link; funders, who
+                          are blocked from cohort pages, get plain text. */}
+                      {canExport ? (
+                        <Link
+                          href={`/dashboard/cohorts/${c.id}`}
+                          className="link-brand font-medium text-sm"
+                        >
+                          {c.name}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-sm">{c.name}</span>
+                      )}
                       {c.region && <Badge variant="outline">{c.region.name}</Badge>}
                     </div>
                     <div className="flex gap-4 text-sm">

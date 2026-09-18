@@ -66,7 +66,9 @@ export default async function SessionsPage() {
           <TabsTrigger value="inprogress">
             In Progress <Badge variant="secondary" className="ml-1">{inProgress.length}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="past">Past</TabsTrigger>
+          <TabsTrigger value="past">
+            Past <Badge variant="secondary" className="ml-1">{past.length}</Badge>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="upcoming" className="mt-4">

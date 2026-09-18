@@ -1,10 +1,10 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
+import { homeRouteFor } from '@/lib/home-route'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Users, ClipboardList, Calendar, DollarSign } from 'lucide-react'
 import { BookingStatusBadge } from '@/components/shared/BookingStatusBadge'
-import { resolveProgrammeId } from '@/lib/scope'
+import { tenantScope, tenantScopeFor } from '@/lib/tenant-db'
 
 export default async function DashboardPage() {
   const session = await getSession()
@@ -12,15 +12,18 @@ export default async function DashboardPage() {
 
   const role = session.user.role
 
-  // Role redirects
-  if (role === 'innovator') redirect('/dashboard/innovator/sessions')
-  if (role === 'funder_viewer') redirect('/dashboard/reports')
-  if (role === 'mentor') redirect('/dashboard/sessions')
+  // Role redirects. The destinations live in lib/home-route.ts so this and the
+  // entry splash cannot drift apart.
+  const home = homeRouteFor(role)
+  if (home !== '/dashboard') redirect(home)
 
   // Scope every figure to the caller's programme. These counts were previously
   // database-wide, so a facilitator saw other funders' totals on their homepage.
-  const programmeId = await resolveProgrammeId(session)
-  if (!programmeId) redirect('/login')
+  const scope = await tenantScope(session)
+  if (!scope) redirect('/login')
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
   const innovatorScope = { cohort: { programmeId } }
 
   // Stats for admin/facilitator
@@ -72,6 +75,10 @@ export default async function DashboardPage() {
 }
 
 async function RecentActivity({ programmeId }: { programmeId: string }) {
+  // Its own connection rather than one handed down as a prop: these render as
+  // separate server components, and a database client is not a prop.
+  const prisma = await tenantScopeFor(programmeId)
+
   const recentBookings = await prisma.booking.findMany({
     where: { innovator: { cohort: { programmeId } } },
     take: 5,
@@ -114,6 +121,8 @@ async function RecentActivity({ programmeId }: { programmeId: string }) {
 }
 
 async function ProgrammeProgress({ programmeId }: { programmeId: string }) {
+  const prisma = await tenantScopeFor(programmeId)
+
   const cohorts = await prisma.cohort.findMany({
     where: { programmeId },
     include: {

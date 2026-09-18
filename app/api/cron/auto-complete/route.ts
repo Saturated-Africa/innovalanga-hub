@@ -1,11 +1,25 @@
 import { NextResponse } from 'next/server'
+import { timingSafeEqual } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { sendNoShowAlert, sendSessionCompletedToMentor } from '@/lib/email'
 import { notifyNoShow, notifySessionCompleted } from '@/lib/notifications'
 
 export async function GET(req: Request) {
-  const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // With CRON_SECRET unset, the comparison below was against the string
+  // "Bearer undefined" - which any caller can send. An unset secret must fail
+  // closed, not become a publicly known credential.
+  const expected = process.env.CRON_SECRET
+  if (!expected) {
+    return NextResponse.json({ error: 'Not configured' }, { status: 503 })
+  }
+
+  const authHeader = req.headers.get('authorization') ?? ''
+  const provided = Buffer.from(authHeader)
+  const wanted = Buffer.from(`Bearer ${expected}`)
+  const authorised =
+    provided.length === wanted.length && timingSafeEqual(provided, wanted)
+
+  if (!authorised) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

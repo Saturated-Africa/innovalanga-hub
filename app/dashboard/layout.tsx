@@ -1,5 +1,7 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { prisma } from '@/lib/prisma'
+import { resolveProgrammeId } from '@/lib/scope'
 import { Sidebar } from '@/components/dashboard/sidebar'
 import { MobileNav } from '@/components/dashboard/MobileNav'
 import { NotificationBell } from '@/components/dashboard/NotificationBell'
@@ -11,17 +13,27 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await getSession()
   if (!session) redirect('/login')
 
+  // Only the dimensions this programme has switched on get a menu entry.
+  const programmeId = await resolveProgrammeId(session)
+  const trackers = programmeId
+    ? await prisma.readinessDimension.findMany({
+        where: { programmeId, enabled: true },
+        orderBy: { order: 'asc' },
+        select: { key: true, shortLabel: true },
+      })
+    : []
+
   const assistantEnabled = isAssistantEnabled()
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <aside className="hidden w-64 shrink-0 md:block">
-        <Sidebar />
+        <Sidebar trackers={trackers} />
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-card px-4 sm:px-6">
-          <MobileNav />
+          <MobileNav trackers={trackers} />
 
           {/* The mark stands in for the sidebar brand once it collapses. */}
           <InnovalangaLogo tone="ink" markClassName="h-6" className="h-6 md:hidden" />
