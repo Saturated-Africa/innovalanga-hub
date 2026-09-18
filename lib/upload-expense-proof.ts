@@ -66,10 +66,17 @@ export async function uploadExpenseProof(
     )
   }
 
+  // The storage key the presign step issued, sent back so the record step can
+  // check it is one this server built. It is a path, not a credential - the
+  // secret scanner reads "s3Key:" followed by a high entropy value and cannot
+  // tell the difference, so it is allowed here explicitly rather than added to
+  // the ignore file, where a fingerprint would carry a commit hash and break on
+  // the next rebase.
+  const storageKey = presignedBody.s3Key // gitleaks:allow
   const recorded = await fetch(base, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...body, s3Key: presignedBody.s3Key }),
+    body: JSON.stringify({ ...body, s3Key: storageKey }),
   })
   const recordedBody = await recorded.json()
   if (!recorded.ok) {
