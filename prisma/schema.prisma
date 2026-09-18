@@ -1,5 +1,10 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // The runtime target is Graviton (t4g) on Amazon Linux 2023, which is
+  // ARM64 with OpenSSL 3. Without this the generated client carries only the
+  // build host's engine and dies on first query with "Query engine binary for
+  // current platform linux-arm64-openssl-3.0.x could not be found".
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x"]
 }
 
 datasource db {
@@ -94,24 +99,31 @@ enum LogFrameLevel {
 // ─── Programme (top-level tenant) ────────────────────────────────────────────
 
 model Programme {
-  id                     String   @id @default(cuid())
-  name                   String
-  slug                   String   @unique
-  description            String?
-  logoUrl                String?
-  organizationName       String?
-  participantLabel       String   @default("innovator") // innovator, fellow, founder, grantee
-  timezone               String   @default("Africa/Johannesburg")
-  currency               String   @default("ZAR")
-  currencySymbol         String   @default("R")
-  dateFormat             String   @default("DD/MM/YYYY")
-  idFormat               String?  // "SA_ID" or null
-  defaultStipendAmount   Float    @default(1000)
+  id                   String  @id @default(cuid())
+  name                 String
+  slug                 String  @unique
+  description          String?
+  logoUrl              String?
+  organizationName     String?
+  participantLabel     String  @default("innovator") // innovator, fellow, founder, grantee
+  timezone             String  @default("Africa/Johannesburg")
+  currency             String  @default("ZAR")
+  currencySymbol       String  @default("R")
+  dateFormat           String  @default("DD/MM/YYYY")
+  idFormat             String? // "SA_ID" or null
+  /// Money is fixed point, never floating.
+  ///
+  /// Stipend amounts are summed across a register and reported to a funder
+  /// alongside project expenditure held as decimals. Floating point addition
+  /// does not associate, so the same set of records totals differently
+  /// depending on the order they are added, and a figure that should reconcile
+  /// against a bank statement lands a fraction of a cent away from it.
+  defaultStipendAmount Decimal @default(1000) @db.Decimal(14, 2)
 
   // Module flags
-  moduleStipendsEnabled  Boolean  @default(false)
-  moduleIPEnabled        Boolean  @default(false)
-  moduleMandEEnabled     Boolean  @default(false)
+  moduleStipendsEnabled Boolean @default(false)
+  moduleIPEnabled       Boolean @default(false)
+  moduleMandEEnabled    Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -126,6 +138,10 @@ model Programme {
   indicators         Indicator[]
   beneficiaryCounts  BeneficiaryCount[]
   milestones         MilestoneTracker[]
+  beneficiaryRecords BeneficiaryRecord[]
+  financeProjects    FinanceProject[]
+  fundAllocations    FundAllocation[]
+  grants             Grant[]
 }
 
 // ─── Region (replaces District enum) ─────────────────────────────────────────
@@ -147,9 +163,9 @@ model Region {
 model ReadinessDimension {
   id          String   @id @default(cuid())
   programmeId String
-  key         String   // "trl" | "brl" | "irl" | "mrl"
-  label       String   // "Technology Readiness Level"
-  shortLabel  String   // "TRL"
+  key         String // "trl" | "brl" | "irl" | "mrl"
+  label       String // "Technology Readiness Level"
+  shortLabel  String // "TRL"
   description String?
   minScore    Int      @default(1)
   maxScore    Int      @default(9)
@@ -165,12 +181,12 @@ model ReadinessDimension {
 // ─── Assessment Period Definitions ───────────────────────────────────────────
 
 model AssessmentPeriodDef {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   programmeId String
-  key         String   // "baseline" | "month_3" | etc.
-  label       String   // "Baseline" | "Month 3" | etc.
+  key         String // "baseline" | "month_3" | etc.
+  label       String // "Baseline" | "Month 3" | etc.
   order       Int
-  monthOffset Int      // 0, 3, 6, 9, 12
+  monthOffset Int // 0, 3, 6, 9, 12
 
   programme Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
 
@@ -180,22 +196,23 @@ model AssessmentPeriodDef {
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 model User {
-  id          String    @id @default(cuid())
-  email       String    @unique
+  id          String   @id @default(cuid())
+  email       String   @unique
   name        String
   password    String?
   role        UserRole
   image       String?
-  programmeId String?   // null = super_admin (sees all)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  programmeId String? // null = super_admin (sees all)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  programme        Programme?        @relation(fields: [programmeId], references: [id])
-  innovatorProfile InnovatorProfile?
-  mentorProfile    MentorProfile?
-  accounts         Account[]
-  sessions         Session[]
-  notifications    Notification[]
+  programme          Programme?          @relation(fields: [programmeId], references: [id])
+  innovatorProfile   InnovatorProfile?
+  mentorProfile      MentorProfile?
+  accounts           Account[]
+  sessions           Session[]
+  notifications      Notification[]
+  beneficiaryRecords BeneficiaryRecord[]
 }
 
 model Account {
@@ -236,67 +253,70 @@ model VerificationToken {
 // ─── Cohorts ─────────────────────────────────────────────────────────────────
 
 model Cohort {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   programmeId String
   regionId    String?
   name        String
   startDate   DateTime
   endDate     DateTime
   description String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  programme  Programme          @relation(fields: [programmeId], references: [id])
-  region     Region?            @relation(fields: [regionId], references: [id])
-  innovators InnovatorProfile[]
-  indicators Indicator[]
-  beneficiaryCounts BeneficiaryCount[]
-  milestones MilestoneTracker[]
+  programme          Programme           @relation(fields: [programmeId], references: [id])
+  region             Region?             @relation(fields: [regionId], references: [id])
+  innovators         InnovatorProfile[]
+  indicators         Indicator[]
+  beneficiaryCounts  BeneficiaryCount[]
+  milestones         MilestoneTracker[]
+  beneficiaryRecords BeneficiaryRecord[]
 }
 
 // ─── Innovator ────────────────────────────────────────────────────────────────
 
 model InnovatorProfile {
-  id                  String    @id @default(cuid())
-  userId              String    @unique
-  cohortId            String
-  regionId            String?
-  firstName           String
-  lastName            String
-  phone               String?
-  idNumberEncrypted   String?   // AES-256-GCM encrypted
-  businessName        String?
-  businessSector      String?
-  bio                 String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  cohortId          String
+  regionId          String?
+  firstName         String
+  lastName          String
+  phone             String?
+  idNumberEncrypted String? // AES-256-GCM encrypted
+  businessName      String?
+  businessSector    String?
+  bio               String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cohort      Cohort            @relation(fields: [cohortId], references: [id])
-  region      Region?           @relation(fields: [regionId], references: [id])
-  assessments Assessment[]
-  bookings    Booking[]
-  stipends    StipendRecord[]
-  documents   Document[]
-  auditLogs   AuditLog[]
-  milestones  MilestoneTracker[]
-  ipAssessment IPAssessment?
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort            Cohort             @relation(fields: [cohortId], references: [id])
+  region            Region?            @relation(fields: [regionId], references: [id])
+  assessments       Assessment[]
+  bookings          Booking[]
+  stipends          StipendRecord[]
+  documents         Document[]
+  auditLogs         AuditLog[]
+  milestones        MilestoneTracker[]
+  ipAssessment      IPAssessment?
+  beneficiaryRecord BeneficiaryRecord?
+  grants            Grant[]
 }
 
 // ─── Mentor ───────────────────────────────────────────────────────────────────
 
 model MentorProfile {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  firstName    String
-  lastName     String
-  phone        String?
-  expertise    String[]
-  bio          String?
-  bookingSlug  String   @unique @default(cuid()) // /book/[bookingSlug]
-  icsToken     String   @unique @default(cuid()) // secret for iCal feed
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  firstName   String
+  lastName    String
+  phone       String?
+  expertise   String[]
+  bio         String?
+  bookingSlug String   @unique @default(cuid()) // /book/[bookingSlug]
+  icsToken    String   @unique @default(cuid()) // secret for iCal feed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   availability    MentorAvailability[]
@@ -309,9 +329,9 @@ model MentorProfile {
 model MentorAvailability {
   id         String   @id @default(cuid())
   mentorId   String
-  dayOfWeek  Int      // 0=Sun … 6=Sat
-  startTime  String   // "HH:MM" UTC
-  endTime    String   // "HH:MM" UTC
+  dayOfWeek  Int // 0=Sun … 6=Sat
+  startTime  String // "HH:MM" UTC
+  endTime    String // "HH:MM" UTC
   bufferMins Int      @default(15)
   createdAt  DateTime @default(now())
 
@@ -371,48 +391,48 @@ model Booking {
   innovatorId           String
   mentorId              String
   eventTypeId           String?
-  scheduledStart        DateTime      // UTC
-  scheduledEnd          DateTime      // UTC
+  scheduledStart        DateTime // UTC
+  scheduledEnd          DateTime // UTC
   actualStart           DateTime?
   actualEnd             DateTime?
   actualDurationMinutes Int?
   status                BookingStatus @default(Confirmed)
-  meetingLink           String?       // Zoom / Teams / Meet — added manually
+  meetingLink           String? // Zoom / Teams / Meet — added manually
   notes                 String?       @db.Text
   noShowReason          String?
-  cancelledBy           String?       // "innovator" | "mentor" | "admin"
+  cancelledBy           String? // "innovator" | "mentor" | "admin"
   cancelReason          String?       @db.Text
-  rescheduledFromId     String?       // previous booking this replaced
+  rescheduledFromId     String? // previous booking this replaced
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
-  innovator         InnovatorProfile  @relation(fields: [innovatorId], references: [id])
-  mentor            MentorProfile     @relation(fields: [mentorId], references: [id])
-  eventType         EventType?        @relation(fields: [eventTypeId], references: [id])
-  rescheduledFrom   Booking?          @relation("RescheduleChain", fields: [rescheduledFromId], references: [id])
-  reschedules       Booking[]         @relation("RescheduleChain")
-  mentorshipLog     MentorshipLog?
+  innovator       InnovatorProfile @relation(fields: [innovatorId], references: [id])
+  mentor          MentorProfile    @relation(fields: [mentorId], references: [id])
+  eventType       EventType?       @relation(fields: [eventTypeId], references: [id])
+  rescheduledFrom Booking?         @relation("RescheduleChain", fields: [rescheduledFromId], references: [id])
+  reschedules     Booking[]        @relation("RescheduleChain")
+  mentorshipLog   MentorshipLog?
 }
 
 // ─── Assessments ──────────────────────────────────────────────────────────────
 
 model Assessment {
-  id                 String    @id @default(cuid())
-  innovatorId        String
-  period             String    // key from AssessmentPeriodDef e.g. "baseline", "month_3"
-  trlScore           Int       // 1-9
-  brlScore           Int       // 1-9
-  irlScore           Int       // 1-9
-  mrlScore           Int?      // 1-9  Market Readiness Level
-  trlJustification   String?   @db.Text
-  brlJustification   String?   @db.Text
-  irlJustification   String?   @db.Text
-  mrlJustification   String?   @db.Text
-  dropJustification  String?   @db.Text
-  assessedBy         String
-  lockedAt           DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  innovatorId       String
+  period            String // key from AssessmentPeriodDef e.g. "baseline", "month_3"
+  trlScore          Int // 1-9
+  brlScore          Int // 1-9
+  irlScore          Int // 1-9
+  mrlScore          Int? // 1-9  Market Readiness Level
+  trlJustification  String?   @db.Text
+  brlJustification  String?   @db.Text
+  irlJustification  String?   @db.Text
+  mrlJustification  String?   @db.Text
+  dropJustification String?   @db.Text
+  assessedBy        String
+  lockedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   innovator InnovatorProfile @relation(fields: [innovatorId], references: [id])
 
@@ -440,15 +460,25 @@ model StipendRecord {
   innovatorId    String
   periodStart    DateTime      @db.Date
   periodEnd      DateTime      @db.Date
-  hoursCompleted Float         @default(0)
-  amount         Float         @default(1000)
+  /// Hours are summed the same way amounts are, so they get the same
+  /// treatment. Two decimals is well beyond the tenth of an hour the platform
+  /// actually records.
+  hoursCompleted Decimal       @default(0) @db.Decimal(8, 2)
+  amount         Decimal       @default(1000) @db.Decimal(14, 2)
   status         StipendStatus @default(Pending)
   overrideReason String?
   paidAt         DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
+  /// Who recorded the payment, and when they did it. Separate from paidAt,
+  /// which is the date the money actually moved.
+  paidRecordedBy   String?
+  paidRecordedAt   DateTime?
+  paymentReference String?
+
   innovator InnovatorProfile @relation(fields: [innovatorId], references: [id])
+  proofs    FinanceProof[]
 }
 
 // ─── Documents ────────────────────────────────────────────────────────────────
@@ -468,14 +498,14 @@ model Document {
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 model AuditLog {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   innovatorId String?
   actorId     String?
   action      String
   entityType  String
   entityId    String
   diff        Json?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime @default(now())
 
   innovator InnovatorProfile? @relation(fields: [innovatorId], references: [id])
 }
@@ -483,18 +513,18 @@ model AuditLog {
 // ─── IP Protection ───────────────────────────────────────────────────────────
 
 model IPAssessment {
-  id              String           @id @default(cuid())
-  innovatorId     String           @unique
-  answers         Json             // { questionId: answer }
+  id              String             @id @default(cuid())
+  innovatorId     String             @unique
+  answers         Json // { questionId: answer }
   recommendations IPRecommendation[] // all applicable types
   primaryRec      IPRecommendation
-  reasoning       String           @db.Text
-  status          IPStatus         @default(Assessed)
-  advisorNotes    String?          @db.Text
+  reasoning       String             @db.Text
+  status          IPStatus           @default(Assessed)
+  advisorNotes    String?            @db.Text
   reviewedBy      String?
   reviewedAt      DateTime?
-  completedAt     DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  completedAt     DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   innovator InnovatorProfile @relation(fields: [innovatorId], references: [id], onDelete: Cascade)
 }
@@ -526,7 +556,7 @@ model LogFrameItem {
   level             LogFrameLevel
   order             Int           @default(0)
   description       String        @db.Text
-  indicators        String?       @db.Text  // narrative indicator text
+  indicators        String?       @db.Text // narrative indicator text
   verificationMeans String?       @db.Text
   assumptions       String?       @db.Text
   createdAt         DateTime      @default(now())
@@ -560,7 +590,7 @@ model Indicator {
 model IndicatorRecord {
   id          String   @id @default(cuid())
   indicatorId String
-  periodLabel String   // "Q1 2024", "Month 3"
+  periodLabel String // "Q1 2024", "Month 3"
   periodStart DateTime @db.Date
   periodEnd   DateTime @db.Date
   value       Float
@@ -611,9 +641,9 @@ model MilestoneTracker {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
-  programme  Programme         @relation(fields: [programmeId], references: [id], onDelete: Cascade)
-  cohort     Cohort?           @relation(fields: [cohortId], references: [id])
-  innovator  InnovatorProfile? @relation(fields: [innovatorId], references: [id])
+  programme Programme         @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  cohort    Cohort?           @relation(fields: [cohortId], references: [id])
+  innovator InnovatorProfile? @relation(fields: [innovatorId], references: [id])
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────
@@ -628,4 +658,653 @@ model Notification {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Beneficiary onboarding ───────────────────────────────────────────────
+//
+// Reproduces the funder's Beneficiary Capturing Form field for field, and
+// records an electronic signature against it.
+//
+// The form is a capture instrument, not an application: it records somebody
+// being onboarded, for funder reporting. There is no scoring or rejection
+// pathway, because the paper form has none.
+//
+// Demographic answers here are what the beneficiary counts in the M&E module
+// were previously typed by hand. Captured per person, those totals become
+// derived and traceable to individuals rather than asserted.
+
+enum BeneficiaryTitle {
+  Mr
+  Ms
+  Mrs
+  Other
+}
+
+enum BeneficiaryGender {
+  Male
+  Female
+}
+
+enum BeneficiaryRace {
+  Black
+  White
+  Other
+}
+
+enum BeneficiaryFormStatus {
+  Draft // being captured, nothing signed
+  AwaitingAcceptance // beneficiary has signed; the centre has not yet accepted
+  Accepted // both signatures present; record is locked
+  Withdrawn // captured in error or withdrawn before acceptance
+}
+
+model BeneficiaryRecord {
+  id          String  @id @default(cuid())
+  programmeId String
+  cohortId    String?
+
+  // Set when the record is accepted and a participant profile is created or
+  // linked. Null while the form is still being captured.
+  innovatorId String? @unique
+
+  // ── Personal information ────────────────────────────────────────────────
+  fullName          String
+  idNumberEncrypted String?
+  gender            BeneficiaryGender?
+  hasDisability     Boolean?
+  race              BeneficiaryRace?
+  raceOther         String?
+  title             BeneficiaryTitle?
+  titleOther        String?
+
+  // ── Personal contact details ────────────────────────────────────────────
+  physicalAddress      String? @db.Text
+  cellphone            String?
+  localMunicipality    String?
+  alternativeNumber    String?
+  districtMunicipality String?
+  email                String
+  province             String?
+
+  // ── Project details ─────────────────────────────────────────────────────
+  hasInnovativeIdea  Boolean?
+  conceptDescription String?  @db.Text
+  projectTitle       String?
+  developmentStage   String?
+  sector             String?
+  supportRequired    String?  @db.Text
+  otherInformation   String?  @db.Text
+
+  // ── Beneficiary signature ───────────────────────────────────────────────
+  //
+  // An ordinary electronic signature under the Electronic Communications and
+  // Transactions Act: the typed name, the explicit act of signing, and the
+  // circumstances recorded around it. The drawn image is what the funder
+  // expects to see on a printed form; the columns beside it are what actually
+  // evidences the signature.
+  beneficiarySignedName     String?
+  beneficiarySignedAt       DateTime?
+  beneficiarySignedIp       String?
+  beneficiarySignedUa       String?
+  beneficiarySignatureImage String?   @db.Text
+
+  // SHA-256 of the canonical answers at the moment of signing. If any field is
+  // altered afterwards the hash no longer matches what was signed, which is
+  // the difference between a signature and a decoration.
+  beneficiarySignedHash String?
+
+  // ── Centre acceptance ───────────────────────────────────────────────────
+  acceptedByName           String?
+  acceptedByUserId         String?
+  acceptedAt               DateTime?
+  acceptedIp               String?
+  acceptedUa               String?
+  acceptanceSignatureImage String?   @db.Text
+
+  status          BeneficiaryFormStatus @default(Draft)
+  withdrawnReason String?
+
+  // The account filling this form in, when the beneficiary completes it
+  // themselves. Null for a form captured by staff on someone's behalf, which
+  // stays supported for onboarding done in person.
+  userId String?
+
+  // A facilitator can send a form back for correction. Doing so voids the
+  // beneficiary's signature, because the answers are about to change and a
+  // signature over answers that then move evidences nothing.
+  returnedAt     DateTime?
+  returnedReason String?
+
+  capturedByUserId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  programme Programme         @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  cohort    Cohort?           @relation(fields: [cohortId], references: [id])
+  innovator InnovatorProfile? @relation(fields: [innovatorId], references: [id])
+  user      User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([programmeId, userId])
+  @@index([programmeId, status])
+}
+
+// ─── Project finance ──────────────────────────────────────────────────────
+//
+// Quarterly financial reporting by the implementing partner to the funder.
+//
+// This is NOT the grant-to-participant flow. It is the organisation's own
+// accounting against a funding agreement: what was budgeted per activity, what
+// was actually spent, why the two differ, and the proof behind every line.
+//
+// The shape follows the funder's workbook rather than a general ledger, because
+// the workbook is the deliverable. Its spine is a work breakdown - milestone,
+// work package, numbered activity - and every figure in every sheet hangs off
+// that. Budgets sit per activity per quarter; actuals are the sum of the
+// transactions coded to that activity.
+
+enum CostCategory {
+  Personnel
+  Operational
+  CapitalEquipment
+  Consumables
+}
+
+enum ProofKind {
+  Invoice
+  ProofOfPayment
+  BankStatement
+  Other
+}
+
+enum ReportingPeriodStatus {
+  Open
+  Submitted
+  Accepted
+}
+
+model FinanceProject {
+  id          String @id @default(cuid())
+  programmeId String
+
+  /// The institution as it appears on the funder's forms.
+  institutionName String
+  agreementNumber String?
+  /// Total award across the agreement, in the programme's currency.
+  totalFunding    Decimal  @default(0) @db.Decimal(14, 2)
+  startDate       DateTime @db.Date
+  endDate         DateTime @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  programme    Programme            @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  activities   ProjectActivity[]
+  transactions FinanceTransaction[]
+  periods      ReportingPeriod[]
+  proofs       FinanceProof[]
+
+  @@index([programmeId])
+}
+
+model ProjectActivity {
+  id        String @id @default(cuid())
+  projectId String
+
+  /// Work breakdown, as the funder's Project Plan sheet lays it out.
+  milestone   String?
+  workPackage String?
+  objective   String? @db.Text
+
+  /// Normalised on import: the sheet contains values such as "3..2".
+  code              String
+  details           String  @db.Text
+  deliverable       String? @db.Text
+  /// "PDF", "Excel Sheet", ".apk" and so on, straight from the sheet.
+  deliverableFormat String?
+
+  startMonth Int?
+  endMonth   Int?
+  duration   String?
+
+  costCategory CostCategory @default(Operational)
+
+  /// Budget per quarter of year one, matching columns L to O of the sheet.
+  budgetQ1 Decimal @default(0) @db.Decimal(14, 2)
+  budgetQ2 Decimal @default(0) @db.Decimal(14, 2)
+  budgetQ3 Decimal @default(0) @db.Decimal(14, 2)
+  budgetQ4 Decimal @default(0) @db.Decimal(14, 2)
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project       FinanceProject       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  transactions  FinanceTransaction[]
+  varianceNotes PeriodVarianceNote[]
+
+  @@unique([projectId, code])
+  @@index([projectId, costCategory])
+}
+
+model FinanceTransaction {
+  id         String  @id @default(cuid())
+  projectId  String
+  activityId String?
+  periodId   String?
+
+  spentOn      DateTime     @db.Date
+  /// As it reads on the bank statement, which is what an auditor matches.
+  supplier     String
+  description  String       @db.Text
+  amount       Decimal      @db.Decimal(14, 2)
+  /// Held on the transaction as well as the activity: a reallocation of the
+  /// activity must not silently rewrite history on past reports.
+  costCategory CostCategory
+
+  reference String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project  FinanceProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activity ProjectActivity? @relation(fields: [activityId], references: [id])
+  period   ReportingPeriod? @relation(fields: [periodId], references: [id])
+  proofs   FinanceProof[]
+
+  @@index([projectId, spentOn])
+  @@index([periodId])
+}
+
+model FinanceProof {
+  id String @id @default(cuid())
+
+  /// Financial evidence belongs to one of two things, never neither.
+  ///
+  /// A project transaction, or a stipend payment to a participant. Both are
+  /// money leaving the organisation against a funder's grant, both need the
+  /// same durable link and the same revocation, so they share one model rather
+  /// than growing a second upload pipeline that would inevitably miss one of
+  /// the checks the first one has.
+  ///
+  /// A database constraint enforces that exactly one of them is set; Prisma
+  /// cannot express that, so it lives in the migration.
+  projectId          String?
+  transactionId      String?
+  stipendRecordId    String?
+  /// Money leaving a fund towards a participant, and how they spent it. Same
+  /// durable link, same revocation, same access log as everything above.
+  grantTrancheId     String?
+  grantExpenditureId String?
+
+  kind        ProofKind
+  filename    String
+  s3Key       String
+  sizeBytes   Int
+  contentType String
+
+  /// Durable share token.
+  ///
+  /// The funder opens this workbook weeks after it is filed, so a presigned S3
+  /// link is useless: those expire in minutes here and cannot exceed seven days
+  /// under SigV4. This token addresses a platform route that streams the file,
+  /// works for someone with no account, can be revoked, and logs every access -
+  /// which is stronger evidence than the shared drive links the sheet uses now.
+  shareToken   String    @unique
+  revokedAt    DateTime?
+  lastViewedAt DateTime?
+  viewCount    Int       @default(0)
+
+  uploadedByUserId String?
+  createdAt        DateTime @default(now())
+
+  project          FinanceProject?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  transaction      FinanceTransaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  stipendRecord    StipendRecord?      @relation(fields: [stipendRecordId], references: [id], onDelete: Cascade)
+  grantTranche     GrantTranche?       @relation(fields: [grantTrancheId], references: [id], onDelete: Cascade)
+  grantExpenditure GrantExpenditure?   @relation(fields: [grantExpenditureId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, kind])
+  @@index([stipendRecordId])
+  @@index([grantTrancheId])
+  @@index([grantExpenditureId])
+}
+
+model ReportingPeriod {
+  id        String @id @default(cuid())
+  projectId String
+
+  /// "Q1", "Q2" and so on, as the funder labels them.
+  label     String
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+
+  status ReportingPeriodStatus @default(Open)
+
+  /// Bank and cash reconciliation, the funder's fifth sheet.
+  amountTransferred     Decimal? @db.Decimal(14, 2)
+  bankBalance           Decimal? @db.Decimal(14, 2)
+  balanceBroughtForward Decimal? @db.Decimal(14, 2)
+  invoiceNumber         String?
+
+  /// Funding budgeted for the quarter, which the sheet reports separately from
+  /// the amount actually transferred. The two differ often enough that the
+  /// funder gives each its own row and asks for the reason.
+  fundingBudgeted Decimal? @db.Decimal(14, 2)
+
+  /// The declaration the funder prints at the foot of the quarterly sheet.
+  /// Held here because the template ships with the previous submitter's name
+  /// and date typed into it, and an unedited export would file somebody else's
+  /// declaration under this institution's agreement.
+  preparedByName String?
+  preparedOn     DateTime? @db.Date
+  approvedByName String?
+  approvedOn     DateTime? @db.Date
+
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project       FinanceProject       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  transactions  FinanceTransaction[]
+  incomeLines   PeriodIncome[]
+  varianceNotes PeriodVarianceNote[]
+
+  @@unique([projectId, label])
+}
+
+model PeriodIncome {
+  id       String @id @default(cuid())
+  periodId String
+
+  label     String
+  budget    Decimal @default(0) @db.Decimal(14, 2)
+  actual    Decimal @default(0) @db.Decimal(14, 2)
+  sortOrder Int     @default(0)
+
+  period ReportingPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@index([periodId])
+}
+
+model PeriodVarianceNote {
+  id         String  @id @default(cuid())
+  periodId   String
+  activityId String?
+
+  /// The funder requires a written reason wherever budget and actual differ.
+  reason  String  @db.Text
+  comment String? @db.Text
+
+  period   ReportingPeriod  @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  activity ProjectActivity? @relation(fields: [activityId], references: [id])
+
+  @@unique([periodId, activityId])
+}
+
+// ==================================================================== *
+// Fund management
+//
+// Saturated Africa manages money on behalf of funders rather than only
+// spending its own, and those are different jobs with different questions.
+// The finance module answers "what did this project cost and can we evidence
+// it". This answers "whose money is it, how much of it have we actually got,
+// and what have we promised away".
+//
+// Three layers, and the separation between them is the point:
+//
+// Fund         a funder's capital and the terms attached to it
+// Allocation   how much of that fund is earmarked for each programme
+// Grant        an award to one participant, paid in approved tranches
+//
+// A fund sits above programmes: one fund can back several, and a programme can
+// be co-funded. So funds are administered at platform level, the way user
+// accounts are, while grants belong to a programme and are scoped like every
+// other participant record.
+// ====================================================================
+
+enum FundStatus {
+  Draft
+  Active
+  Closed
+}
+
+/// What the management fee is charged on. Funders differ, and the difference is
+/// material: a fee on commitment is earned whether or not any money moves.
+enum ManagementFeeBasis {
+  Commitment
+  Disbursement
+}
+
+enum GrantStatus {
+  Draft
+  Approved
+  Active
+  Suspended
+  Completed
+  Cancelled
+}
+
+enum TrancheStatus {
+  Pending
+  Approved
+  Paid
+  Withheld
+  Cancelled
+}
+
+/// How a participant's reported spend was judged.
+enum ExpenditureStatus {
+  Submitted
+  Accepted
+  Queried
+  Rejected
+}
+
+/// The legal form of the entity a participant represents. The grant is made to
+/// the person; the funder reports on the entity, so both are recorded.
+enum EntityType {
+  PtyLtd
+  NPC
+  CloseCorporation
+  SoleProprietor
+  Trust
+  Cooperative
+  Other
+}
+
+model Funder {
+  id   String @id @default(cuid())
+  name String @unique
+
+  /// Short form for reports where the full legal name will not fit.
+  shortName          String?
+  registrationNumber String?
+  contactName        String?
+  contactEmail       String?
+  contactPhone       String?
+  notes              String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  funds Fund[]
+}
+
+model Fund {
+  id       String @id @default(cuid())
+  funderId String
+
+  name      String
+  /// The funder's own agreement or contract number.
+  reference String?
+
+  /// Total the funder has committed. Allocations across programmes may not
+  /// exceed it, which lib/funds checks rather than trusts.
+  committedAmount Decimal @default(0) @db.Decimal(16, 2)
+  currency        String  @default("ZAR")
+
+  startDate DateTime   @db.Date
+  endDate   DateTime   @db.Date
+  status    FundStatus @default(Draft)
+
+  /// Held as a rate, not a percentage: 0.0750 is seven and a half percent.
+  /// Percentages invite somebody to type 7.5 and mean 750 basis points.
+  managementFeeRate  Decimal?            @db.Decimal(6, 4)
+  managementFeeBasis ManagementFeeBasis?
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  funder      Funder           @relation(fields: [funderId], references: [id], onDelete: Restrict)
+  allocations FundAllocation[]
+  receipts    FundReceipt[]
+  grants      Grant[]
+
+  @@index([funderId])
+}
+
+/// Money actually received from the funder.
+///
+/// Separate from the commitment on purpose. A commitment is a promise and a
+/// receipt is cash, and the gap between them is exactly what decides whether a
+/// tranche can be paid this week. Conflating the two is how a fund manager
+/// disburses money it has not been sent.
+model FundReceipt {
+  id     String @id @default(cuid())
+  fundId String
+
+  amount     Decimal  @db.Decimal(16, 2)
+  receivedOn DateTime @db.Date
+  reference  String?
+  note       String?  @db.Text
+
+  recordedBy String?
+  createdAt  DateTime @default(now())
+
+  fund Fund @relation(fields: [fundId], references: [id], onDelete: Cascade)
+
+  @@index([fundId, receivedOn])
+}
+
+/// How much of a fund is earmarked for one programme.
+model FundAllocation {
+  id          String @id @default(cuid())
+  fundId      String
+  programmeId String
+
+  amount Decimal @db.Decimal(16, 2)
+  note   String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fund      Fund      @relation(fields: [fundId], references: [id], onDelete: Cascade)
+  programme Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  @@unique([fundId, programmeId])
+  @@index([programmeId])
+}
+
+/// An award to one participant, drawn from one fund.
+model Grant {
+  id          String @id @default(cuid())
+  programmeId String
+  fundId      String
+  innovatorId String
+
+  entityName               String
+  entityType               EntityType @default(PtyLtd)
+  entityRegistrationNumber String?
+
+  reference     String?
+  purpose       String  @db.Text
+  awardedAmount Decimal @db.Decimal(14, 2)
+
+  status GrantStatus @default(Draft)
+
+  approvedBy        String?
+  approvedAt        DateTime?
+  agreementSignedAt DateTime?
+  startDate         DateTime? @db.Date
+  endDate           DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  programme    Programme          @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  fund         Fund               @relation(fields: [fundId], references: [id], onDelete: Restrict)
+  innovator    InnovatorProfile   @relation(fields: [innovatorId], references: [id], onDelete: Cascade)
+  tranches     GrantTranche[]
+  expenditures GrantExpenditure[]
+
+  @@index([programmeId, status])
+  @@index([fundId])
+  @@index([innovatorId])
+}
+
+/// One scheduled payment of a grant.
+///
+/// The rule that makes this more than a payment list: a tranche cannot be paid
+/// until the one before it has been approved. That is the funder's control over
+/// money already handed out, and it lives in lib/funds so it holds wherever a
+/// payment is recorded from.
+model GrantTranche {
+  id      String @id @default(cuid())
+  grantId String
+
+  sequence    Int
+  amount      Decimal   @db.Decimal(14, 2)
+  plannedDate DateTime? @db.Date
+
+  /// What has to be true before this tranche is released.
+  conditions String? @db.Text
+
+  status TrancheStatus @default(Pending)
+
+  approvedBy     String?
+  approvedAt     DateTime?
+  /// Why a tranche was held back. Required when the status is Withheld.
+  withheldReason String?   @db.Text
+
+  paidOn           DateTime? @db.Date
+  paymentReference String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  grant  Grant          @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  proofs FinanceProof[]
+
+  @@unique([grantId, sequence])
+  @@index([grantId, status])
+}
+
+/// What the participant spent the grant on.
+model GrantExpenditure {
+  id        String  @id @default(cuid())
+  grantId   String
+  trancheId String?
+
+  spentOn     DateTime     @db.Date
+  supplier    String
+  description String       @db.Text
+  amount      Decimal      @db.Decimal(14, 2)
+  category    CostCategory @default(Operational)
+
+  status     ExpenditureStatus @default(Submitted)
+  reviewedBy String?
+  reviewedAt DateTime?
+  reviewNote String?           @db.Text
+
+  submittedByUserId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  grant  Grant          @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  proofs FinanceProof[]
+
+  @@index([grantId, status])
 }

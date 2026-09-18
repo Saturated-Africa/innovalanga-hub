@@ -1,17 +1,31 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import Link from 'next/link'
 import { formatCurrency } from '@/lib/utils'
 import { CohortProgressChart } from './CohortProgressChart'
 import { Download } from 'lucide-react'
+import { BOOKING_STATUS, statusMeta } from '@/lib/status-colors'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { tenantScope } from '@/lib/tenant-db'
 
 export default async function ReportsPage() {
   const session = await getSession()
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator', 'funder_viewer'].includes(session.user.role)) redirect('/dashboard')
+
+  // Every count below used to be programme-wide across the whole database, so
+  // a facilitator on one programme saw another funder's totals.
+  const scope = await tenantScope(session)
+  if (!scope) redirect('/dashboard')
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+  const innovatorScope = { cohort: { programmeId } }
+
+  const canExport = session.user.role !== 'funder_viewer'
 
   const [
     totalInnovators,
@@ -22,14 +36,19 @@ export default async function ReportsPage() {
     assessmentsByPeriod,
     sessionsByStatus,
   ] = await Promise.all([
-    prisma.innovatorProfile.count(),
-    prisma.assessment.count(),
-    prisma.booking.count({ where: { status: 'Completed' } }),
+    prisma.innovatorProfile.count({ where: innovatorScope }),
+    prisma.assessment.count({ where: { innovator: innovatorScope } }),
+    prisma.booking.count({ where: { status: 'Completed', innovator: innovatorScope } }),
     prisma.stipendRecord.aggregate({
-      where: { status: { in: ['Eligible', 'Override'] }, paidAt: { not: null } },
+      where: {
+        status: { in: ['Eligible', 'Override'] },
+        paidAt: { not: null },
+        innovator: innovatorScope,
+      },
       _sum: { amount: true },
     }),
     prisma.cohort.findMany({
+      where: { programmeId },
       include: {
         region: { select: { name: true } },
         _count: { select: { innovators: true } },
@@ -38,8 +57,16 @@ export default async function ReportsPage() {
         },
       },
     }),
-    prisma.assessment.groupBy({ by: ['period'], _count: { _all: true } }),
-    prisma.booking.groupBy({ by: ['status'], _count: { _all: true } }),
+    prisma.assessment.groupBy({
+      by: ['period'],
+      where: { innovator: innovatorScope },
+      _count: { _all: true },
+    }),
+    prisma.booking.groupBy({
+      by: ['status'],
+      where: { innovator: innovatorScope },
+      _count: { _all: true },
+    }),
   ])
 
   const PERIOD_ORDER = ['baseline', 'month_3', 'month_6', 'month_9', 'final']
@@ -69,32 +96,40 @@ export default async function ReportsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Programme Reports</h1>
-          <p className="text-muted-foreground mt-1">Programme Performance — Key Indicators</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {(['innovators', 'assessments', 'sessions', 'stipends'] as const).map((type) => (
-            <Button key={type} variant="outline" size="sm" asChild>
-              <a href={`/api/reports/export?type=${type}`} download>
-                <Download className="h-3.5 w-3.5 mr-1.5" />
-                {type.charAt(0).toUpperCase() + type.slice(1)}
-              </a>
-            </Button>
-          ))}
-        </div>
+      <PageHeader title="Programme Reports" description="Programme Performance — Key Indicators" />
+        {/* Every one of these exports is person-level, so the API refuses a
+            funder outright. Rendering the buttons anyway gave funders four
+            controls that could only ever fail - QA logged them as working
+            downloads and "inspected" files that never arrived. */}
+        {canExport ? (
+          <div className="flex items-center gap-2 flex-wrap">
+            {(['innovators', 'assessments', 'sessions', 'stipends'] as const).map((type) => (
+              <Button key={type} variant="outline" size="sm" asChild>
+                <a href={`/api/reports/export?type=${type}`} download>
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </a>
+              </Button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground max-w-[22rem] text-right">
+            Funder access is aggregate only. The figures on this page may be
+            shared; per participant exports are not available.
+          </p>
+        )}
       </div>
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
-          { label: 'Total Innovators', value: totalInnovators, color: 'text-blue-600' },
-          { label: 'Assessments Completed', value: totalAssessments, color: 'text-green-600' },
-          { label: 'Sessions Completed', value: completedSessions, color: 'text-purple-600' },
+          { label: 'Total Innovators', value: totalInnovators, color: 'text-foreground' },
+          { label: 'Assessments Completed', value: totalAssessments, color: 'text-foreground' },
+          { label: 'Sessions Completed', value: completedSessions, color: 'text-foreground' },
           {
             label: 'Stipends Disbursed',
-            value: formatCurrency(totalStipendsPaid._sum.amount ?? 0),
-            color: 'text-orange-600',
+            value: formatCurrency(Number(totalStipendsPaid._sum.amount ?? 0)),
+            color: 'text-warning',
           },
         ].map((kpi) => (
           <Card key={kpi.label}>
@@ -120,14 +155,27 @@ export default async function ReportsPage() {
                 return (
                   <div key={c.id} className="border rounded-lg p-3">
                     <div className="flex justify-between mb-2">
-                      <span className="font-medium text-sm">{c.name}</span>
+                      {/* These rows read as buttons - bordered, padded, rounded -
+                          but carried no link, so clicking them did nothing. Roles
+                          that can open a cohort now get a real link; funders, who
+                          are blocked from cohort pages, get plain text. */}
+                      {canExport ? (
+                        <Link
+                          href={`/dashboard/cohorts/${c.id}`}
+                          className="link-brand font-medium text-sm"
+                        >
+                          {c.name}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-sm">{c.name}</span>
+                      )}
                       {c.region && <Badge variant="outline">{c.region.name}</Badge>}
                     </div>
                     <div className="flex gap-4 text-sm">
                       <span>{c._count.innovators} innovators</span>
-                      <span className="text-blue-600">TRL: {avgTRL}</span>
-                      <span className="text-green-600">BRL: {avgBRL}</span>
-                      <span className="text-purple-600">IRL: {avgIRL}</span>
+                      <span className="text-chart-1">TRL: {avgTRL}</span>
+                      <span className="text-chart-2">BRL: {avgBRL}</span>
+                      <span className="text-chart-3">IRL: {avgIRL}</span>
                     </div>
                   </div>
                 )
@@ -162,15 +210,11 @@ export default async function ReportsPage() {
             {sessionsByStatus.map((s) => (
               <div key={s.status} className="flex items-center gap-2">
                 <span
-                  className={`inline-block h-3 w-3 rounded-full ${
-                    s.status === 'Completed' ? 'bg-green-500'
-                    : s.status === 'Confirmed' ? 'bg-blue-500'
-                    : s.status === 'Cancelled' ? 'bg-red-500'
-                    : s.status === 'InProgress' ? 'bg-yellow-500'
-                    : 'bg-gray-400'
+                  className={`inline-block h-2.5 w-2.5 rounded-full ${
+                    statusMeta(BOOKING_STATUS, s.status).dot
                   }`}
                 />
-                <span className="text-sm">{s.status}</span>
+                <span className="text-sm">{statusMeta(BOOKING_STATUS, s.status).label}</span>
                 <span className="text-sm font-bold">{s._count._all}</span>
               </div>
             ))}

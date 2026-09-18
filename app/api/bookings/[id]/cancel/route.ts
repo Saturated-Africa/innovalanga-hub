@@ -2,15 +2,18 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { canActOnBooking } from '@/lib/authz'
+import { resolveProgrammeId } from '@/lib/scope'
 
 const schema = z.object({
   cancelledBy: z.enum(['innovator', 'mentor', 'admin']),
   cancelReason: z.string().optional(),
 })
 
-interface Params { params: { id: string } }
+interface Params { params: Promise<{ id: string }> }
 
-export async function PATCH(req: Request, { params }: Params) {
+export async function PATCH(req: Request, props: Params) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -30,7 +33,12 @@ export async function PATCH(req: Request, { params }: Params) {
   // Only the innovator, that mentor, or an admin can cancel
   const isInnovator = session.user.id === booking.innovator.user.id
   const isMentor = session.user.id === booking.mentor.user.id
-  const isAdmin = ['super_admin', 'facilitator'].includes(session.user.role)
+  // A facilitator on one programme could cancel another funder's sessions:
+  // the role was checked, the programme was not.
+  const programmeId = await resolveProgrammeId(session)
+  const isAdmin =
+    ['super_admin', 'facilitator'].includes(session.user.role) &&
+    (await canActOnBooking(session, params.id, programmeId))
   if (!isInnovator && !isMentor && !isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }

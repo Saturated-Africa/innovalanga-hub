@@ -1,19 +1,28 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/shared/DataTable'
 import { formatDate } from '@/lib/utils'
 import { UserPlus } from 'lucide-react'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { tenantScope } from '@/lib/tenant-db'
+import { InnovatorsTable } from './InnovatorsTable'
 
 export default async function InnovatorsPage() {
   const session = await getSession()
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')
 
+  const scope = await tenantScope(session)
+  if (!scope) redirect('/dashboard')
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+
   const innovators = await prisma.innovatorProfile.findMany({
+    where: { cohort: { programmeId } },
     include: {
       user: { select: { email: true } },
       cohort: { select: { name: true } },
@@ -49,11 +58,11 @@ export default async function InnovatorsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Innovators</h1>
-          <p className="text-muted-foreground mt-1">{innovators.length} registered innovators</p>
-        </div>
+      <PageHeader
+        title="Innovators"
+        description={<>{innovators.length} registered innovators</>}
+        actions={
+          <>
         {session.user.role === 'super_admin' && (
           <Button asChild>
             <Link href="/dashboard/innovators/new">
@@ -62,57 +71,11 @@ export default async function InnovatorsPage() {
             </Link>
           </Button>
         )}
-      </div>
-
-      <DataTable
-        data={rows}
-        searchKeys={['name', 'email', 'businessName', 'cohort']}
-        csvFilename="innovators.csv"
-        columns={[
-          {
-            key: 'name',
-            label: 'Name',
-            sortable: true,
-            render: (row: Row) => (
-              <Link href={`/dashboard/innovators/${row.id}`} className="font-medium text-primary hover:underline">
-                {row.name}
-              </Link>
-            ),
-          },
-          { key: 'cohort', label: 'Cohort', sortable: true },
-          {
-            key: 'region',
-            label: 'Region',
-            render: (row: Row) => (
-              <Badge variant="outline" className="text-xs">{row.region}</Badge>
-            ),
-          },
-          { key: 'businessName', label: 'Business', sortable: true },
-          { key: 'sector', label: 'Sector' },
-          {
-            key: 'latestTRL',
-            label: 'TRL',
-            render: (row: Row) => (
-              <span className="font-mono font-semibold text-blue-600">{row.latestTRL}</span>
-            ),
-          },
-          {
-            key: 'latestBRL',
-            label: 'BRL',
-            render: (row: Row) => (
-              <span className="font-mono font-semibold text-green-600">{row.latestBRL}</span>
-            ),
-          },
-          {
-            key: 'latestIRL',
-            label: 'IRL',
-            render: (row: Row) => (
-              <span className="font-mono font-semibold text-purple-600">{row.latestIRL}</span>
-            ),
-          },
-          { key: 'sessions', label: 'Sessions' },
-        ]}
+          </>
+        }
       />
+
+      <InnovatorsTable rows={rows} />
     </div>
   )
 }

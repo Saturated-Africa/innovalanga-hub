@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { isAllowedUploadType, MAX_UPLOAD_BYTES } from '@/lib/uploads'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/hooks/use-toast'
@@ -49,6 +50,25 @@ export function DocumentVault({ innovatorId, documents: initial, readonly = fals
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
   async function handleUpload(file: File) {
+    // Checked here for a useful message; the server enforces both the type and
+    // the size regardless, since anything in the browser can be bypassed.
+    if (!isAllowedUploadType(file.type)) {
+      toast({
+        title: 'That file type is not accepted',
+        description: 'Upload a PDF, image, Office document, CSV or text file.',
+        variant: 'destructive',
+      })
+      return
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast({
+        title: 'File is too large',
+        description: `The limit is ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB.`,
+        variant: 'destructive',
+      })
+      return
+    }
+
     setUploading(true)
 
     // 1. Get presigned URL
@@ -57,14 +77,20 @@ export function DocumentVault({ innovatorId, documents: initial, readonly = fals
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         filename: file.name,
-        contentType: file.type || 'application/octet-stream',
+        contentType: file.type,
         innovatorId,
+        sizeBytes: file.size,
       }),
     })
 
     if (!urlRes.ok) {
       setUploading(false)
-      toast({ title: 'Upload failed', description: 'Could not get upload URL.', variant: 'destructive' })
+      const body = await urlRes.json().catch(() => ({}))
+      toast({
+        title: 'Upload failed',
+        description: body.error ?? 'Could not get upload URL.',
+        variant: 'destructive',
+      })
       return
     }
 
@@ -73,7 +99,7 @@ export function DocumentVault({ innovatorId, documents: initial, readonly = fals
     // 2. PUT file to S3
     const s3Res = await fetch(url, {
       method: 'PUT',
-      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      headers: { 'Content-Type': file.type },
       body: file,
     })
 

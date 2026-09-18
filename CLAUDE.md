@@ -2,11 +2,16 @@
 
 ## Project overview
 
-Innovalanga Hub is a full-stack innovation progress tracker for a South African
-government-backed entrepreneurship programme operating under TIA (Technology Innovation
-Agency) and DSTI (Department of Science, Technology and Innovation). It tracks the
-business, technological, and personal development progress of youth innovators across
-two districts: Gert Sibande (Mpumalanga) and Fezile Dabi (Free State).
+Innovalanga Hub is a full-stack innovation progress tracker for youth
+entrepreneurship programmes, run by Saturated Africa. It tracks the business,
+technological and personal development progress of innovators.
+
+The platform is multi-tenant and funder-agnostic. TIA and DSTI were the first
+programmes on it, not the shape of it: regions, cohorts, participant labels,
+currency and enabled modules are all per-programme configuration. Do not hard
+code a funder, a province or a district anywhere.
+
+The slogan is "Innovation thrives where the sun rises." 
 
 This is NOT a learning management system. There are no courses, lessons, or quizzes.
 It is a structured readiness measurement, mentorship scheduling, and programme reporting
@@ -16,14 +21,16 @@ platform.
 
 ## Tech stack
 
-- **Framework:** Next.js 14 (App Router), TypeScript
+- **Framework:** Next.js 16 (App Router), TypeScript. `params` and `searchParams`
+  are promises - await them. Route protection lives in `proxy.ts`, which is the
+  Next 16 name for what used to be `middleware.ts`.
 - **Styling:** Tailwind CSS, shadcn/ui
 - **Database:** PostgreSQL via Prisma ORM
 - **Auth:** NextAuth.js (role-based)
 - **Storage:** AWS S3 (or Cloudflare R2) for file uploads
 - **Charts:** Recharts (RadarChart, LineChart, BarChart, PieChart)
 - **Email:** Resend
-- **Calendar:** Google Calendar API (OAuth) — optional per mentor
+- **AI assistant:** Claude API via `@anthropic-ai/sdk` (`claude-opus-5`), streaming
 - **PDF export:** React PDF or jsPDF
 - **Deployment:** Vercel + Railway/Supabase
 
@@ -33,6 +40,7 @@ platform.
 
 ```bash
 npm run dev          # Start dev server at localhost:3000
+npm run test:scope   # Test the AI assistant's authorisation rules
 npm run build        # Production build
 npm run typecheck    # Run TypeScript type checks
 npx prisma migrate dev --name <name>   # Run DB migration
@@ -115,6 +123,59 @@ between periods without a written justification. All three scores required befor
 
 ---
 
+## Brand system
+
+The identity comes from `Innova Logo Exports/SVGs/Colour Logo.svg`. Tokens live in
+`app/globals.css`; the Tailwind `brand` and `chart` scales expose them.
+
+| Token | Value |
+|---|---|
+| Volt (accent) | `#D8F100` |
+| Ink | `#1F1D1E` |
+| Charcoal | `#2C2A2B` |
+| Warm grey | `#3A3739` |
+
+**The one rule that matters:** volt has a relative luminance of 0.775 — it is
+optically a *light* colour. White on volt is 1.27:1 (illegible); ink on volt is
+13.17:1.
+
+- `--primary` is volt and `--primary-foreground` is ink. Never white.
+- Volt is never a text or link colour on a light surface. It is a fill, chip,
+  indicator bar, or focus ring — always with ink on top. For volt that must read
+  as ink-on-white (icons, focus rings), use `brand-volt-deep` (`#6E7C00`).
+- Links use `.link-brand`: ink text with a volt underline.
+
+Typography is Figtree (`next/font/google`), the closest free match to the brand's
+Gilroy-Black. The wordmark is set as live text in `components/brand/Logo.tsx`; the
+true Gilroy lockup is at `public/brand/innovalanga-lockup.png` for fixed-size uses.
+
+Shared primitives to use rather than hand-rolling:
+`PageHeader`, `EmptyState`, `DataTable`, `Badge` variants, `lib/status-colors.ts`
+(one definition of every status colour), `lib/readiness-colors.ts` (TRL/BRL/IRL/MRL).
+
+---
+
+## AI assistant ("Langa")
+
+Advisory and drafting only — **it never writes to the database**.
+
+- `lib/ai/scope-rules.ts` — dependency-free authorisation rules. **This is the
+  security boundary.** Covered by `npm run test:scope`.
+- `lib/ai/scope.ts` — resolves the caller's context from session + DB.
+- `lib/ai/tools.ts` — read-only tools. Each re-derives scope server-side, so a
+  prompt injection cannot widen access. Never decrypts `idNumberEncrypted`;
+  never selects passwords, OAuth tokens, `icsToken` or `bookingSlug`.
+- `lib/ai/prompts.ts` — base prompt (cached) plus a per-role appendix.
+- `app/api/assistant/route.ts` — the app's only streaming route. Node runtime
+  (Prisma), `maxDuration` 60 (mirrored in `vercel.json`).
+
+Requires `ANTHROPIC_API_KEY`. Without it the launcher is hidden and the route
+returns 503; nothing else is affected.
+
+`funder_viewer` gets aggregates only — its tool set contains no per-person reader.
+
+---
+
 ## Scheduling module rules (implement carefully)
 
 1. **Slot generation:** available slots = recurring weekly availability MINUS
@@ -177,7 +238,7 @@ CRON_SECRET
 ## Build phases — work in this order
 
 ### Phase 1 — Foundation
-- Scaffold Next.js 14 with TypeScript, Tailwind, shadcn/ui
+- Scaffold Next.js with TypeScript, Tailwind, shadcn/ui
 - Set up Prisma schema with all models; run migration
 - Seed: 2 cohorts, 5 innovators, 3 mentors, 3 assessments per innovator,
   sample bookings (mix of statuses), sample stipend records

@@ -23,7 +23,7 @@ export function StartSessionButton({ bookingId }: { bookingId: string }) {
   }
 
   return (
-    <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={handleStart} disabled={starting}>
+    <Button size="sm" className="bg-success hover:bg-success/90" onClick={handleStart} disabled={starting}>
       {starting
         ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Starting…</>
         : <><Play className="mr-1.5 h-3.5 w-3.5" />Start Session</>}

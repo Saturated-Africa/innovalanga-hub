@@ -2,12 +2,14 @@ import { getSession } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { BookingWizard } from './BookingWizard'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 interface Props {
-  params: { mentorSlug: string }
+  params: Promise<{ mentorSlug: string }>
 }
 
-export default async function BookMentorPage({ params }: Props) {
+export default async function BookMentorPage(props: Props) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) redirect('/login')
   if (session.user.role !== 'innovator') redirect('/dashboard')
@@ -39,12 +41,7 @@ export default async function BookMentorPage({ params }: Props) {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold">
-          Book with {mentor.firstName} {mentor.lastName}
-        </h1>
-        <p className="text-muted-foreground mt-1">{mentor.expertise.join(' · ')}</p>
-      </div>
+      <PageHeader title="Book with {mentor.firstName} {mentor.lastName}" description={<>{mentor.expertise.join(' · ')}</>} />
       <BookingWizard
         mentor={{
           id: mentor.id,

@@ -1,22 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { objectsToCsv as toCsv } from '@/lib/csv'
 import { formatDate } from '@/lib/utils'
+import { resolveProgrammeId } from '@/lib/scope'
+import { tenantScope } from '@/lib/tenant-db'
 
-function toCsv(rows: Record<string, string | number>[]): string {
-  if (rows.length === 0) return ''
-  const headers = Object.keys(rows[0])
-  const escape = (v: string | number) => {
-    const s = String(v)
-    return s.includes(',') || s.includes('"') || s.includes('\n')
-      ? `"${s.replace(/"/g, '""')}"`
-      : s
-  }
-  return [
-    headers.join(','),
-    ...rows.map((r) => headers.map((h) => escape(r[h] ?? '')).join(',')),
-  ].join('\r\n')
-}
+// CSV building lives in lib/csv.ts. The local version here escaped only the
+// RFC 4180 delimiters, so a cell beginning `=` or `@` was still executed as
+// a formula by whoever opened the file - and these files go to funders.
 
 /**
  * GET /api/mande/export?type=indicators|milestones|beneficiaries
@@ -31,14 +22,14 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const type = searchParams.get('type') ?? 'indicators'
 
-  // Resolve programme
-  let programmeId = session.user.programmeId ?? null
-  if (!programmeId) {
-    const first = await prisma.programme.findFirst({ orderBy: { createdAt: 'asc' }, select: { id: true } })
-    programmeId = first?.id ?? null
-  }
-  if (!programmeId) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
-
+  // Through the shared resolver rather than a copy of it. Two implementations
+  // of "which programme is this caller on" is one more than the number that can
+  // be kept correct.
+  const scope = await tenantScope(session)
+  if (!scope) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
   let csv = ''
   let filename = 'mande-export.csv'
 

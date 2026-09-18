@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { tenantScope } from '@/lib/tenant-db'
+import { canActOnBooking } from '@/lib/authz'
 
 const schema = z.object({
   scheduledStart: z.string().datetime(),
@@ -9,11 +10,19 @@ const schema = z.object({
   notes: z.string().optional(),
 })
 
-interface Params { params: { id: string } }
+interface Params { params: Promise<{ id: string }> }
 
-export async function POST(req: Request, { params }: Params) {
+export async function POST(req: Request, props: Params) {
+  const params = await props.params;
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Resolved before the booking is read, not inside the branch that checks an
+  // administrator's tenancy: the connection has to be in place for every read
+  // in this handler, including the participant's own.
+  const scope = await tenantScope(session)
+  if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const { programmeId, db: prisma } = scope
 
   const original = await prisma.booking.findUnique({
     where: { id: params.id },
@@ -27,11 +36,17 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Only confirmed bookings can be rescheduled.' }, { status: 422 })
   }
 
+  /* A participant may reschedule their own session. An administrator may
+     reschedule one inside their own programme - which the role check alone did
+     not establish, so an administrator on one funder's programme could move a
+     session on another's. */
   const isInnovator = session.user.id === original.innovator.user.id
   const isMentor = session.user.id === original.mentor.user.id
-  const isAdmin = ['super_admin', 'facilitator'].includes(session.user.role)
-  if (!isInnovator && !isMentor && !isAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  if (!isInnovator && !isMentor) {
+    if (!(await canActOnBooking(session, original.id, programmeId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
   }
 
   // Innovators must reschedule at least 24h in advance

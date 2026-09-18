@@ -6,8 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, Zap } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 function LoginForm() {
@@ -68,7 +68,10 @@ function LoginForm() {
         />
       </div>
       {error && (
-        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2">
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2"
+        >
           <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
@@ -88,35 +91,36 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4">
-            <Zap className="h-8 w-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900">Innovalanga Hub</h1>
-          <p className="text-sm text-gray-500 mt-1">Innovation Programme Platform</p>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Sign in</CardTitle>
-            <CardDescription>Enter your credentials to access the platform</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Suspense fallback={<div className="h-32 animate-pulse bg-muted rounded" />}>
-              <LoginForm />
-            </Suspense>
-          </CardContent>
-        </Card>
-
-        <p className="text-center text-sm text-gray-500">
-          New participant?{' '}
-          <Link href="/register" className="font-medium text-primary hover:underline">
-            Create an account
-          </Link>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Sign in</h1>
+        <span aria-hidden className="mt-2 block h-1 w-10 rounded-full bg-primary" />
+        <p className="mt-3 text-sm text-muted-foreground">
+          Enter your credentials to access the platform.
         </p>
       </div>
+
+      <Suspense
+        fallback={
+          <div className="space-y-4">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        }
+      >
+        <LoginForm />
+      </Suspense>
+
+      <p className="text-sm text-muted-foreground">
+        New participant?{' '}
+        <Link
+          href="/register"
+          className="font-medium text-foreground underline decoration-primary decoration-2 underline-offset-4 hover:decoration-brand-volt-deep"
+        >
+          Create an account
+        </Link>
+      </p>
     </div>
   )
 }

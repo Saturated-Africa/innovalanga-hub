@@ -1,10 +1,10 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime, formatDuration } from '@/lib/utils'
 import { MentorshipLogEditor } from '@/components/dashboard/MentorshipLogEditor'
+import { tenantScope } from '@/lib/tenant-db'
 
 export default async function MentorshipPage() {
   const session = await getSession()
@@ -13,9 +13,22 @@ export default async function MentorshipPage() {
 
   const isMentor = session.user.role === 'mentor'
 
+  // Mentors were already scoped to their own logs. Facilitators and admins were
+  // not scoped at all, so they read every programme's mentorship notes.
+  const scope = await tenantScope(session)
+  if (!scope) redirect('/dashboard')
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+
   const whereClause = isMentor
     ? { booking: { mentor: { userId: session.user.id }, status: 'Completed' as const } }
-    : { booking: { status: 'Completed' as const } }
+    : {
+        booking: {
+          status: 'Completed' as const,
+          innovator: { cohort: { programmeId } },
+        },
+      }
 
   const logs = await prisma.mentorshipLog.findMany({
     where: whereClause,
@@ -68,7 +81,7 @@ export default async function MentorshipPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="outline" className="border-green-300 text-green-700 bg-green-50">
+                      <Badge variant="outline" className="border-success/30 text-success bg-success/10">
                         Completed
                       </Badge>
                       {b.actualDurationMinutes && (

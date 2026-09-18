@@ -4,5 +4,10 @@
       "path": "/api/cron/auto-complete",
       "schedule": "*/15 * * * *"
     }
-  ]
+  ],
+  "functions": {
+    "app/api/assistant/route.ts": {
+      "maxDuration": 60
+    }
+  }
 }

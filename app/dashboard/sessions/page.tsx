@@ -9,6 +9,7 @@ import { SessionTimer } from '@/components/dashboard/SessionTimer'
 import { StartSessionButton } from '@/components/dashboard/StartSessionButton'
 import { formatDateTime, formatDuration } from '@/lib/utils'
 import { BookingStatus } from '@prisma/client'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default async function SessionsPage() {
   const session = await getSession()
@@ -55,10 +56,7 @@ export default async function SessionsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Sessions</h1>
-        <p className="text-muted-foreground mt-1">Manage and review mentoring sessions</p>
-      </div>
+      <PageHeader title="Sessions" description="Manage and review mentoring sessions" />
 
       <Tabs defaultValue={inProgress.length > 0 ? 'inprogress' : 'upcoming'}>
         <TabsList>
@@ -68,7 +66,9 @@ export default async function SessionsPage() {
           <TabsTrigger value="inprogress">
             In Progress <Badge variant="secondary" className="ml-1">{inProgress.length}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="past">Past</TabsTrigger>
+          <TabsTrigger value="past">
+            Past <Badge variant="secondary" className="ml-1">{past.length}</Badge>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="upcoming" className="mt-4">
@@ -99,7 +99,7 @@ export default async function SessionsPage() {
           ) : (
             <div className="space-y-3">
               {inProgress.map((b) => (
-                <Card key={b.id} className="border-green-200 bg-green-50/30">
+                <Card key={b.id} className="border-success/25 bg-success/[0.06]">
                   <CardContent className="pt-4 pb-4">
                     <div className="flex items-start justify-between gap-4">
                       <SessionInfo booking={b} />

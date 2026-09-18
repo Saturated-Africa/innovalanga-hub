@@ -2,12 +2,14 @@ import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { AssessmentForm } from './AssessmentForm'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 interface Props {
-  searchParams: { innovatorId?: string }
+  searchParams: Promise<{ innovatorId?: string }>
 }
 
-export default async function NewAssessmentPage({ searchParams }: Props) {
+export default async function NewAssessmentPage(props: Props) {
+  const searchParams = await props.searchParams;
   const session = await getSession()
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')
@@ -31,10 +33,7 @@ export default async function NewAssessmentPage({ searchParams }: Props) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">New Assessment</h1>
-        <p className="text-muted-foreground mt-1">Record TRL, BRL, IRL, and MRL scores for an innovator</p>
-      </div>
+      <PageHeader title="New Assessment" description="Record TRL, BRL, IRL, and MRL scores for an innovator" />
       <AssessmentForm
         innovators={innovators}
         existingAssessments={existingAssessments}

@@ -37,10 +37,10 @@ export function AssessmentTimeline({ assessments }: AssessmentTimelineProps) {
             <div key={a.id} className="flex gap-4 pl-10 relative">
               {/* Dot */}
               <div className="absolute left-2.5 flex h-3 w-3 items-center justify-center">
-                <div className="h-3 w-3 rounded-full border-2 border-primary bg-white" />
+                <div className="h-3 w-3 rounded-full border-2 border-primary bg-card" />
               </div>
 
-              <div className="flex-1 rounded-lg border bg-white p-4 shadow-sm">
+              <div className="flex-1 rounded-lg border bg-card p-4 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm">{PERIOD_LABELS[a.period]}</span>
@@ -92,7 +92,7 @@ function ScoreCell({
       {delta !== null && (
         <span
           className={`text-xs font-medium ${
-            delta > 0 ? 'text-green-600' : delta < 0 ? 'text-red-500' : 'text-gray-400'
+            delta > 0 ? 'text-success' : delta < 0 ? 'text-destructive' : 'text-muted-foreground'
           }`}
         >
           {delta > 0 ? '+' : ''}{delta}

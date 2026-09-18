@@ -1,0 +1,110 @@
+name: CI
+
+# There was no CI of any kind on this repository, so nothing checked types,
+# tests or dependency advisories before a change reached the deployed instance.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  schedule:
+    # Advisories are published against code that has not changed, so the audit
+    # runs weekly as well as on push.
+    - cron: '0 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the secret scan below has something to compare.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Node must match the runtime the application ships on, which is 22.
+      # On 20 the test runner does not expand this glob: it matched nothing,
+      # reported nothing, and the job passed green having run no tests at all.
+      # CI was silent about every test in this repository until this was found.
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # Build-time only. The real values are injected at runtime from
+          # Secrets Manager and never exist in CI.
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+          NEXTAUTH_SECRET: build-time-placeholder-value-not-a-secret
+          ENCRYPTION_KEY: build-time-placeholder-0000000000000000000000000000
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Fails the build on high or critical advisories. Moderate and low are
+      # reported without blocking, so the signal stays meaningful.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+      - name: Report all advisories
+        if: always()
+        run: npm audit || true
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The gitleaks ACTION requires a paid licence for organisation accounts
+      # and fails without one. The gitleaks binary is MIT licensed, so it is
+      # fetched and run directly - same scanner, no licence server, and nothing
+      # about the check depends on a third-party action staying free.
+      - name: Scan history for committed secrets
+        run: |
+          VERSION=8.28.0
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"             | tar -xz -C /tmp gitleaks
+          /tmp/gitleaks detect --source . --redact --verbose --exit-code 1
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      # Its own package with its own lockfile. The root install does not provide
+      # aws-cdk-lib, which is why the root typecheck could not see it.
+      - run: npm ci
+        working-directory: infra
+
+      - name: Typecheck infrastructure
+        run: npx tsc --noEmit -p tsconfig.json
+        working-directory: infra

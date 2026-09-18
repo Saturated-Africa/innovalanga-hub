@@ -1,6 +1,6 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
+import { tenantScope } from '@/lib/tenant-db'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,37 +8,46 @@ import Link from 'next/link'
 import { ShieldCheck, ShieldAlert, ShieldOff } from 'lucide-react'
 import { REC_CONFIG, STATUS_CONFIG } from '@/lib/ip-engine'
 import { IPAdvisorPanel } from './IPAdvisorPanel'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default async function IPDashboardPage() {
   const session = await getSession()
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')
 
-  // Resolve programme
-  let programmeId = session.user.programmeId ?? null
-  if (!programmeId) {
-    const first = await prisma.programme.findFirst({ orderBy: { createdAt: 'asc' }, select: { id: true, moduleIPEnabled: true } })
-    programmeId = first?.id ?? null
-    if (!first?.moduleIPEnabled) {
-      return (
-        <div className="flex flex-col items-center justify-center h-64 gap-3">
-          <p className="text-muted-foreground font-medium">IP Protection module is not enabled for this programme.</p>
-          <p className="text-sm text-muted-foreground">Enable it in Admin → Programme Settings.</p>
-        </div>
-      )
-    }
+  const scope = await tenantScope(session)
+  if (!scope) redirect('/dashboard')
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+
+  // Checked for whichever programme the caller is actually on. This used to sit
+  // inside the branch that ran only when the account had no programme of its
+  // own, so a facilitator assigned to a programme with the module switched off
+  // saw the module anyway.
+  const programme = await prisma.programme.findUnique({
+    where: { id: programmeId },
+    select: { moduleIPEnabled: true },
+  })
+  if (!programme?.moduleIPEnabled) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <p className="text-muted-foreground font-medium">IP Protection module is not enabled for this programme.</p>
+        <p className="text-sm text-muted-foreground">Enable it in Admin → Programme Settings.</p>
+      </div>
+    )
   }
 
   // All innovators in programme
   const [allInnovators, assessments] = await Promise.all([
     prisma.innovatorProfile.findMany({
-      where: { cohort: { programmeId: programmeId ?? undefined } },
+      where: { cohort: { programmeId } },
       select: { id: true, firstName: true, lastName: true, businessName: true, cohort: { select: { name: true } } },
       orderBy: { lastName: 'asc' },
     }),
     prisma.iPAssessment.findMany({
       where: {
-        innovator: { cohort: { programmeId: programmeId ?? undefined } },
+        innovator: { cohort: { programmeId } },
       },
       include: {
         innovator: {
@@ -65,10 +74,7 @@ export default async function IPDashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">IP Protection</h1>
-          <p className="text-muted-foreground mt-1">Intellectual property assessment status across all innovators</p>
-        </div>
+      <PageHeader title="IP Protection" description="Intellectual property assessment status across all innovators" />
       </div>
 
       {/* Summary KPIs */}
@@ -76,21 +82,21 @@ export default async function IPDashboardPage() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground">Assessed</p>
-            <p className="text-3xl font-bold text-green-600 mt-1">{assessments.length}</p>
+            <p className="text-3xl font-bold text-success mt-1">{assessments.length}</p>
             <p className="text-xs text-muted-foreground">of {allInnovators.length} innovators</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground">Not Yet Assessed</p>
-            <p className="text-3xl font-bold text-orange-500 mt-1">{unassessed.length}</p>
+            <p className="text-3xl font-bold text-warning mt-1">{unassessed.length}</p>
             <p className="text-xs text-muted-foreground">innovators pending</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground">Protected</p>
-            <p className="text-3xl font-bold text-blue-600 mt-1">{statusCounts['Protected'] ?? 0}</p>
+            <p className="text-3xl font-bold text-info mt-1">{statusCounts['Protected'] ?? 0}</p>
             <p className="text-xs text-muted-foreground">IP applications approved</p>
           </CardContent>
         </Card>
@@ -105,7 +111,7 @@ export default async function IPDashboardPage() {
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {Object.entries(recCounts).map(([rec, count]) => (
-                <div key={rec} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${REC_CONFIG[rec]?.color ?? 'bg-gray-100'}`}>
+                <div key={rec} className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-1.5">
                   <span className="text-sm font-medium">{REC_CONFIG[rec]?.label ?? rec}</span>
                   <span className="text-sm font-bold">({count})</span>
                 </div>
@@ -157,7 +163,7 @@ export default async function IPDashboardPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <ShieldOff className="h-4 w-4 text-orange-500" /> Not Yet Assessed ({unassessed.length})
+              <ShieldOff className="h-4 w-4 text-warning" /> Not Yet Assessed ({unassessed.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -168,7 +174,7 @@ export default async function IPDashboardPage() {
                     <p className="text-sm font-medium">{i.firstName} {i.lastName}</p>
                     <p className="text-xs text-muted-foreground">{i.businessName ?? i.cohort.name}</p>
                   </div>
-                  <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50">Pending</Badge>
+                  <Badge variant="outline" className="text-warning border-warning/25 bg-warning/10">Pending</Badge>
                 </div>
               ))}
             </div>

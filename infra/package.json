@@ -1,0 +1,24 @@
+{
+  "name": "innovalanga-infra",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AWS infrastructure for the Innovalanga Hub platform",
+  "scripts": {
+    "synth": "cdk synth --strict",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy --all",
+    "destroy": "cdk destroy --all",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "aws-cdk": "^2.1000.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "cdk-nag": "^2.34.0",
+    "constructs": "^10.4.0"
+  }
+}

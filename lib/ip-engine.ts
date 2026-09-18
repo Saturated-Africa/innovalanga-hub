@@ -136,15 +136,23 @@ export function deriveRecommendations(answers: Answers): IPResult {
     reasons.push('Based on your answers, formal IP protection may not be immediately applicable. Continue developing your innovation and reassess as it matures.')
   }
 
-  // Multiple protection
+  // "Multiple Protection Types" summarises the list; it is not a member of it.
+  //
+  // It used to be pushed into `recs`, which put it in the "All applicable
+  // protection types" row as though it were a fifth category sitting beside
+  // patent and trademark. Worse, it sat second in the priority order below
+  // patent, so an innovator who needed four kinds of protection was given the
+  // single headline "Patent Required" - a narrower instruction than the
+  // assessment had actually reached. QA found the headline and the list
+  // contradicting each other on the same screen.
   const substantiveRecs = recs.filter((r) => r !== 'ReviewRequired')
-  if (substantiveRecs.length > 1) {
-    if (!recs.includes('MultipleProtection')) recs.push('MultipleProtection')
-  }
+  const needsMultiple = substantiveRecs.length > 1
 
-  // Primary recommendation: priority order
-  const priority = ['PatentRequired', 'MultipleProtection', 'TrademarkRequired', 'CopyrightApplicable', 'TradeSecret', 'ReviewRequired', 'NoProtectionNeeded']
-  const primaryRec = priority.find((p) => recs.includes(p)) ?? recs[0]
+  // Priority for the single headline when exactly one type applies.
+  const priority = ['PatentRequired', 'TrademarkRequired', 'CopyrightApplicable', 'TradeSecret', 'ReviewRequired', 'NoProtectionNeeded']
+  const primaryRec = needsMultiple
+    ? 'MultipleProtection'
+    : priority.find((p) => recs.includes(p)) ?? recs[0]
 
   return {
     recommendations: recs,
@@ -153,48 +161,41 @@ export function deriveRecommendations(answers: Answers): IPResult {
   }
 }
 
-export const REC_CONFIG: Record<string, { label: string; color: string; description: string }> = {
+export const REC_CONFIG: Record<string, { label: string; description: string }> = {
   PatentRequired: {
     label: 'Patent Required',
-    color: 'bg-blue-100 text-blue-800',
     description: 'File a provisional patent application immediately to secure your priority date. Consult a patent attorney before any public disclosure.',
   },
   TrademarkRequired: {
     label: 'Trademark Required',
-    color: 'bg-purple-100 text-purple-800',
     description: 'Register your brand name, logo, or slogan with the Companies and Intellectual Property Commission (CIPC) in South Africa.',
   },
   CopyrightApplicable: {
     label: 'Copyright Applicable',
-    color: 'bg-green-100 text-green-800',
     description: 'Copyright protection applies automatically — ensure written agreements assign ownership and consider formal registration as evidence.',
   },
   TradeSecret: {
     label: 'Trade Secret',
-    color: 'bg-orange-100 text-orange-800',
     description: 'Protect confidential information with NDAs, employee agreements, and strict access controls.',
   },
   MultipleProtection: {
     label: 'Multiple Protection Types',
-    color: 'bg-indigo-100 text-indigo-800',
     description: 'Your innovation requires more than one type of IP protection. Engage a specialist IP attorney for a comprehensive strategy.',
   },
   NoProtectionNeeded: {
     label: 'No Immediate Action',
-    color: 'bg-gray-100 text-gray-700',
     description: 'No formal IP protection is required at this stage. Reassess as your innovation develops.',
   },
   ReviewRequired: {
     label: 'Expert Review Required',
-    color: 'bg-yellow-100 text-yellow-800',
     description: 'Your situation requires expert review by an IP attorney before determining the right protection strategy.',
   },
 }
 
-export const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  NotAssessed: { label: 'Not Assessed', color: 'bg-gray-100 text-gray-700' },
-  Assessed: { label: 'Assessed', color: 'bg-blue-100 text-blue-800' },
-  ApplicationPending: { label: 'Application Pending', color: 'bg-yellow-100 text-yellow-800' },
-  Protected: { label: 'Protected', color: 'bg-green-100 text-green-800' },
-  Expired: { label: 'Expired', color: 'bg-red-100 text-red-800' },
+export const STATUS_CONFIG: Record<string, { label: string }> = {
+  NotAssessed: { label: 'Not Assessed' },
+  Assessed: { label: 'Assessed' },
+  ApplicationPending: { label: 'Application Pending' },
+  Protected: { label: 'Protected' },
+  Expired: { label: 'Expired' },
 }

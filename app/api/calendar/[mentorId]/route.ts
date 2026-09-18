@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { buildICalFeed } from '@/lib/ical'
 
-interface Params { params: { mentorId: string } }
+interface Params { params: Promise<{ mentorId: string }> }
 
 // GET /api/calendar/[mentorId]?token=xxx  — iCal feed (unauthenticated, protected by token)
-export async function GET(req: Request, { params }: Params) {
+export async function GET(req: Request, props: Params) {
+  const params = await props.params;
   const { searchParams } = new URL(req.url)
   const token = searchParams.get('token')
 
@@ -21,7 +22,11 @@ export async function GET(req: Request, { params }: Params) {
       status: { in: ['Confirmed', 'InProgress', 'Completed', 'Rescheduled'] },
     },
     include: {
-      innovator: true,
+      // Was `innovator: true`, which pulled the full profile - phone number and
+      // encrypted ID number included - into a feed that only ever renders a
+      // name. This route is reached with a bearer token in a URL, so it is the
+      // last place that should over-fetch.
+      innovator: { select: { firstName: true, lastName: true, businessName: true } },
       eventType: true,
     },
     orderBy: { scheduledStart: 'desc' },

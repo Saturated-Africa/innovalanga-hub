@@ -7,10 +7,32 @@ import {
 } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { addDays, addMonths, startOfMonth, endOfMonth, addHours } from 'date-fns'
+import { EVENT_COLORS } from '../lib/event-colors'
 
 const prisma = new PrismaClient()
 
+/**
+ * Refuse to run against a production database.
+ *
+ * The first thing this script does is delete every row in every table. It also
+ * creates a super_admin whose password is written in this file, so running it
+ * anywhere real would both destroy the data and leave a publicly known
+ * administrator credential behind.
+ *
+ * SEED_ALLOW_PRODUCTION exists only for restoring a demo environment that
+ * legitimately runs with NODE_ENV=production.
+ */
+function assertSafeToSeed() {
+  if (process.env.NODE_ENV === 'production' && process.env.SEED_ALLOW_PRODUCTION !== 'yes') {
+    throw new Error(
+      'Refusing to seed: NODE_ENV is production. This deletes every row in the ' +
+        'database. Set SEED_ALLOW_PRODUCTION=yes only if that is genuinely intended.'
+    )
+  }
+}
+
 async function main() {
+  assertSafeToSeed()
   console.log('Seeding database...')
 
   // Clear all data (order matters for FK constraints)
@@ -43,7 +65,9 @@ async function main() {
   await prisma.user.deleteMany()
   await prisma.programme.deleteMany()
 
-  const hash = (pw: string) => bcrypt.hashSync(pw, 10)
+  // Cost 12, matching the application. The seed used cost 10, so the demo
+  // accounts were cheaper to attack than real ones.
+  const hash = (pw: string) => bcrypt.hashSync(pw, 12)
 
   // ── Programme ─────────────────────────────────────────────────────────────
   const tia = await prisma.programme.create({
@@ -51,7 +75,7 @@ async function main() {
       name: 'TIA Innovation Programme',
       slug: 'tia',
       description:
-        'South African government-backed entrepreneurship programme under TIA and DSTI. Tracks youth innovators across Gert Sibande and Fezile Dabi districts.',
+        'Government-backed entrepreneurship programme under TIA and DSTI. Tracks youth innovators across the programme regions.',
       organizationName: 'TIA · DSTI',
       participantLabel: 'innovator',
       timezone: 'Africa/Johannesburg',
@@ -67,11 +91,11 @@ async function main() {
   })
 
   // ── Regions ───────────────────────────────────────────────────────────────
-  const regionGS = await prisma.region.create({
-    data: { programmeId: tia.id, name: 'Gert Sibande', code: 'GS' },
+  const regionNorth = await prisma.region.create({
+    data: { programmeId: tia.id, name: 'Northern Region', code: 'NR' },
   })
-  const regionFD = await prisma.region.create({
-    data: { programmeId: tia.id, name: 'Fezile Dabi', code: 'FD' },
+  const regionSouth = await prisma.region.create({
+    data: { programmeId: tia.id, name: 'Southern Region', code: 'SR' },
   })
 
   // ── Readiness Dimensions ──────────────────────────────────────────────────
@@ -131,21 +155,21 @@ async function main() {
   const cohort1 = await prisma.cohort.create({
     data: {
       programmeId: tia.id,
-      regionId: regionGS.id,
-      name: 'Gert Sibande Cohort 2024',
+      regionId: regionNorth.id,
+      name: 'Northern Cohort 2024',
       startDate: new Date('2024-01-15'),
       endDate: new Date('2024-12-15'),
-      description: 'First cohort for Gert Sibande district innovators focusing on agri-tech and fintech solutions.',
+      description: 'First cohort, focusing on agri-tech and fintech solutions.',
     },
   })
   const cohort2 = await prisma.cohort.create({
     data: {
       programmeId: tia.id,
-      regionId: regionFD.id,
-      name: 'Fezile Dabi Cohort 2024',
+      regionId: regionSouth.id,
+      name: 'Southern Cohort 2024',
       startDate: new Date('2024-02-01'),
       endDate: new Date('2024-12-31'),
-      description: 'Inaugural cohort for Fezile Dabi district innovators spanning health-tech and clean energy.',
+      description: 'Inaugural cohort, spanning health-tech and clean energy.',
     },
   })
 
@@ -281,7 +305,7 @@ async function main() {
           durationMins: 60,
           bufferBefore: 0,
           bufferAfter: 15,
-          color: '#0ea5e9',
+          color: EVENT_COLORS[0],
           active: true,
         },
         {
@@ -292,7 +316,7 @@ async function main() {
           durationMins: 30,
           bufferBefore: 0,
           bufferAfter: 10,
-          color: '#8b5cf6',
+          color: EVENT_COLORS[1],
           active: true,
         },
       ],
@@ -307,11 +331,11 @@ async function main() {
       firstName: 'Zanele',
       lastName: 'Khumalo',
       phone: '+27761234567',
-      regionId: regionGS.id,
+      regionId: regionNorth.id,
       cohortId: cohort1.id,
       businessName: 'AgroSense SA',
       businessSector: 'Agri-Tech',
-      bio: 'Developing IoT sensors for small-scale farmers in Mpumalanga.',
+      bio: 'Developing IoT sensors for small-scale farmers.',
     },
     {
       email: 'lethiwe@innovalanga.co.za',
@@ -319,7 +343,7 @@ async function main() {
       firstName: 'Lethiwe',
       lastName: 'Mahlangu',
       phone: '+27771234567',
-      regionId: regionGS.id,
+      regionId: regionNorth.id,
       cohortId: cohort1.id,
       businessName: 'PayLocal',
       businessSector: 'FinTech',
@@ -331,7 +355,7 @@ async function main() {
       firstName: 'Bongani',
       lastName: 'Zwane',
       phone: '+27781234567',
-      regionId: regionGS.id,
+      regionId: regionNorth.id,
       cohortId: cohort1.id,
       businessName: 'EduBridge',
       businessSector: 'EdTech',
@@ -343,7 +367,7 @@ async function main() {
       firstName: 'Palesa',
       lastName: 'Mokoena',
       phone: '+27791234567',
-      regionId: regionFD.id,
+      regionId: regionSouth.id,
       cohortId: cohort2.id,
       businessName: 'HealthLink',
       businessSector: 'Health Tech',
@@ -355,11 +379,11 @@ async function main() {
       firstName: 'Siphamandla',
       lastName: 'Dube',
       phone: '+27701234567',
-      regionId: regionFD.id,
+      regionId: regionSouth.id,
       cohortId: cohort2.id,
       businessName: 'SolarGrid',
       businessSector: 'Clean Energy',
-      bio: 'Solar micro-grid solutions for off-grid communities in Free State.',
+      bio: 'Solar micro-grid solutions for off-grid communities.',
     },
   ]
 
@@ -596,7 +620,7 @@ async function main() {
       problem:
         'South African youth entrepreneurs face structural barriers to scaling innovative businesses: lack of access to mentors, markets, funding, and readiness measurement frameworks.',
       vision:
-        'A thriving ecosystem of market-ready, sustainable youth-led innovative businesses contributing to inclusive economic growth across Mpumalanga and Free State.',
+        'A thriving ecosystem of market-ready, sustainable youth-led innovative businesses contributing to inclusive economic growth.',
       inputs:
         'Government funding via TIA and DSTI, programme management staff, pool of experienced business and technical mentors, assessment frameworks, digital platform (Innovalanga Hub).',
       activities:
@@ -800,7 +824,7 @@ async function main() {
       female: 4,
       youth: 9,
       pwd: 1,
-      notes: 'Cohort 1 first quarter — Gert Sibande and Fezile Dabi combined',
+      notes: 'Cohort 1 first quarter — all regions combined',
       recordedBy: 'Admin',
     },
   })

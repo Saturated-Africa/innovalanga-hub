@@ -41,11 +41,12 @@ interface AssessmentFormProps {
   assessorName: string
 }
 
-const SCORE_COLORS: Record<string, string> = {
-  TRL: 'blue',
-  BRL: 'green',
-  IRL: 'purple',
-  MRL: 'orange',
+/** Selected-score chip fill per dimension, from the shared readiness palette. */
+const SCORE_FILL: Record<string, string> = {
+  TRL: 'bg-chart-1 text-white',
+  BRL: 'bg-chart-2 text-white',
+  IRL: 'bg-chart-3 text-white',
+  MRL: 'bg-chart-4 text-white',
 }
 
 function ScoreSelector({
@@ -59,15 +60,8 @@ function ScoreSelector({
   onChange: (v: number) => void
   labelFn: (n: number) => string
 }) {
-  const color = SCORE_COLORS[type]
-  const activeClass =
-    color === 'blue'
-      ? 'bg-blue-600 text-white'
-      : color === 'green'
-      ? 'bg-green-600 text-white'
-      : color === 'purple'
-      ? 'bg-purple-600 text-white'
-      : 'bg-orange-500 text-white'
+  // Every chart-ramp colour is dark enough to carry white at >= 4.6:1.
+  const activeClass = SCORE_FILL[type] ?? 'bg-chart-5 text-white'
 
   return (
     <div>
@@ -190,7 +184,8 @@ export function AssessmentForm({
         irlJustification,
         mrlJustification,
         dropJustification: needsDropJustification ? dropJustification : undefined,
-        assessedBy: assessorName,
+        // Not sent. The server records the signed-in user as the assessor, so
+        // the name on a locked score is the person who submitted it.
       }),
     })
 
@@ -371,7 +366,7 @@ export function AssessmentForm({
         </div>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={submitting}>
           {submitting ? (
             <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
@@ -382,6 +377,12 @@ export function AssessmentForm({
         <Button type="button" variant="outline" onClick={() => router.back()}>
           Cancel
         </Button>
+        {/* The server records the signed-in user as the assessor. Shown here so
+            the name on a score that cannot be edited afterwards is not a
+            surprise. */}
+        <span className="text-xs text-muted-foreground">
+          Recorded as assessed by {assessorName}. This cannot be edited once saved.
+        </span>
       </div>
     </form>
   )

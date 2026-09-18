@@ -23,6 +23,8 @@ import {
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, Plus, Pencil, Trash2, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react'
+import { INDICATOR_TYPE_VARIANT } from '@/lib/status-colors'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 type IndicatorType = 'Output' | 'Outcome' | 'Impact' | 'Process'
 type Frequency = 'Monthly' | 'Quarterly' | 'SemiAnnual' | 'Annual'
@@ -49,13 +51,6 @@ interface Indicator {
   active: boolean
   records: IndicatorRecord[]
   _count: { records: number }
-}
-
-const TYPE_COLOR: Record<IndicatorType, string> = {
-  Output: 'bg-green-100 text-green-800',
-  Outcome: 'bg-blue-100 text-blue-800',
-  Impact: 'bg-purple-100 text-purple-800',
-  Process: 'bg-orange-100 text-orange-800',
 }
 
 const EMPTY_FORM = {
@@ -102,7 +97,7 @@ export default function IndicatorsPage() {
 
   async function fetchIndicators(pid: string) {
     setLoading(true)
-    const res = await fetch(`/api/mande/indicators?programmeId=${pid}`)
+    const res = await fetch('/api/mande/indicators')
     if (res.ok) setIndicators(await res.json())
     setLoading(false)
   }
@@ -207,16 +202,18 @@ export default function IndicatorsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Indicators</h1>
-          <p className="text-muted-foreground mt-1">Track programme indicators and record periodic data</p>
-        </div>
+      <PageHeader
+        title="Indicators"
+        description="Track programme indicators and record periodic data"
+        actions={
+          <>
         <Button onClick={() => { setForm(EMPTY_FORM); setOpen(true) }}>
           <Plus className="h-4 w-4 mr-2" />
           Add Indicator
         </Button>
-      </div>
+          </>
+        }
+      />
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -246,7 +243,7 @@ export default function IndicatorsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm">{ind.name}</span>
-                        <Badge className={`text-xs py-0 ${TYPE_COLOR[ind.type]}`}>{ind.type}</Badge>
+                        <Badge size="sm" variant={INDICATOR_TYPE_VARIANT[ind.type] ?? 'muted'}>{ind.type}</Badge>
                         <Badge variant="outline" className="text-xs py-0">{ind.frequency}</Badge>
                         {!ind.active && <Badge variant="secondary" className="text-xs py-0">Inactive</Badge>}
                       </div>

@@ -1,0 +1,33 @@
+# Secrets. .env and .env.local hold real production values and sit in the
+# working tree, so a naive `COPY . .` would bake them into an image layer where
+# anyone who can pull the image can read them.
+.env
+.env.*
+!.env.example
+
+# Never needed in the image, and node_modules alone is ~681 MB.
+node_modules
+.next
+out
+build
+
+.git
+.gitignore
+*.md
+!README.md
+
+# Local tooling and test output
+.vscode
+.idea
+coverage
+tsconfig.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+
+# Infrastructure code is deployed separately, not shipped in the app image.
+infra
+
+e2e
+playwright.config.ts
+test-results
+playwright-report

@@ -7,14 +7,15 @@ import { CheckCircle2, Calendar, Clock, Download } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface Props {
-  searchParams: { bookingId?: string }
+  searchParams: Promise<{ bookingId?: string }>
 }
 
 function toSAST(d: Date): Date {
   return new Date(d.getTime() + 2 * 60 * 60 * 1000)
 }
 
-export default async function BookingConfirmedPage({ searchParams }: Props) {
+export default async function BookingConfirmedPage(props: Props) {
+  const searchParams = await props.searchParams;
   const session = await getSession()
   if (!session) redirect('/login')
 
@@ -39,8 +40,8 @@ export default async function BookingConfirmedPage({ searchParams }: Props) {
   return (
     <div className="max-w-lg mx-auto space-y-6 py-8">
       <div className="flex flex-col items-center text-center space-y-3">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-          <CheckCircle2 className="h-8 w-8 text-green-600" />
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success/12">
+          <CheckCircle2 className="h-8 w-8 text-success" />
         </div>
         <h1 className="text-2xl font-bold">You&apos;re booked!</h1>
         <p className="text-muted-foreground text-sm">
@@ -75,7 +76,7 @@ export default async function BookingConfirmedPage({ searchParams }: Props) {
               href={booking.meetingLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary underline underline-offset-2 text-xs"
+              className="link-brand text-xs"
             >
               {booking.meetingLink}
             </a>

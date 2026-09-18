@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { encrypt } from '@/lib/encryption'
 import { validateSAIdNumber } from '@/lib/utils'
+import { tenantScope } from '@/lib/tenant-db'
 
 const schema = z.object({
   userId: z.string().min(1),
@@ -32,10 +32,39 @@ export async function POST(req: Request) {
 
   const { userId, idNumber, ...rest } = parsed.data
 
+  const scope = await tenantScope(session)
+  if (!scope) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
   if (user.role !== 'innovator') {
     return NextResponse.json({ error: 'User is not an innovator' }, { status: 400 })
+  }
+
+  // The cohort is client-supplied and decides which programme this participant
+  // belongs to. Unchecked, a facilitator on one funder's programme could enrol
+  // somebody straight into another funder's cohort, where they would then
+  // appear in that funder's reporting and stipend register.
+  const cohort = await prisma.cohort.findFirst({
+    where: { id: rest.cohortId, programmeId },
+    select: { id: true },
+  })
+  if (!cohort) {
+    return NextResponse.json({ error: 'That cohort is not in your programme.' }, { status: 403 })
+  }
+
+  // A region, where given, has to belong to the same programme as the cohort.
+  if (rest.regionId) {
+    const region = await prisma.region.findFirst({
+      where: { id: rest.regionId, programmeId },
+      select: { id: true },
+    })
+    if (!region) {
+      return NextResponse.json({ error: 'That region is not in your programme.' }, { status: 403 })
+    }
   }
 
   const existing = await prisma.innovatorProfile.findUnique({ where: { userId } })
@@ -56,6 +85,20 @@ export async function POST(req: Request) {
       userId,
       idNumberEncrypted,
       ...rest,
+    },
+    // Explicit select. Returning the created row wholesale handed the client
+    // back `idNumberEncrypted` - the encrypted SA ID number - along with the
+    // phone number, neither of which the caller needs to see the record was
+    // created.
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      cohortId: true,
+      regionId: true,
+      businessName: true,
+      businessSector: true,
+      createdAt: true,
     },
   })
 

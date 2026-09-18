@@ -1,0 +1,127 @@
+import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
+import { encrypt } from '@/lib/encryption'
+import { validateSAIdNumber } from '@/lib/utils'
+import { tenantScope } from '@/lib/tenant-db'
+import { beneficiaryDraftSchema } from '@/lib/beneficiary-form'
+import { isStaff } from '@/lib/beneficiary-access'
+
+/**
+ * Beneficiary capture forms.
+ *
+ * Capturing is a staff activity: the form is completed with the beneficiary
+ * present and signed on the spot, which is how the paper version is used. The
+ * beneficiary does not need an account to sign, and usually does not have one
+ * yet, so nothing here assumes a participant record exists.
+ */
+
+/**
+ * GET /api/beneficiaries
+ *
+ * Staff see every form in their programme. A beneficiary sees only their own,
+ * which is the same query with one extra clause rather than a separate route
+ * that could forget it.
+ */
+export async function GET() {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const scope = await tenantScope(session)
+  if (!scope) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+
+  const mine = isStaff(session.user.role) ? {} : { userId: session.user.id }
+
+  const records = await prisma.beneficiaryRecord.findMany({
+    where: { programmeId, ...mine },
+    orderBy: { createdAt: 'desc' },
+    // No ID number, no signature images. A list does not need either, and the
+    // encrypted column has no business leaving the server at all.
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      status: true,
+      projectTitle: true,
+      createdAt: true,
+      beneficiarySignedAt: true,
+      acceptedAt: true,
+      cohort: { select: { id: true, name: true } },
+    },
+  })
+
+  return NextResponse.json(records)
+}
+
+/**
+ * POST /api/beneficiaries - start a form.
+ *
+ * A beneficiary starts their own, and the record is stamped with their account
+ * so ownership is decided here rather than inferred later. Staff start one on
+ * behalf of somebody being onboarded in person, which leaves no owner.
+ */
+export async function POST(req: Request) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const parsed = beneficiaryDraftSchema.safeParse(await req.json())
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid input', issues: parsed.error.issues }, { status: 400 })
+  }
+
+  const scope = await tenantScope(session)
+  if (!scope) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+
+  const { cohortId, idNumber, ...rest } = parsed.data
+
+  // A client-supplied cohort is checked against the caller's programme.
+  if (cohortId) {
+    const cohort = await prisma.cohort.findFirst({
+      where: { id: cohortId, programmeId },
+      select: { id: true },
+    })
+    if (!cohort) {
+      return NextResponse.json({ error: 'Cohort not found in your programme' }, { status: 403 })
+    }
+  }
+
+  let idNumberEncrypted: string | null = null
+  if (idNumber) {
+    if (!validateSAIdNumber(idNumber)) {
+      return NextResponse.json({ error: 'Invalid SA ID number' }, { status: 400 })
+    }
+    idNumberEncrypted = encrypt(idNumber)
+  }
+
+  const ownedByCaller = !isStaff(session.user.role)
+
+  try {
+    const record = await prisma.beneficiaryRecord.create({
+      data: {
+        ...rest,
+        programmeId,
+        cohortId: cohortId ?? null,
+        idNumberEncrypted,
+        userId: ownedByCaller ? session.user.id : null,
+        capturedByUserId: session.user.id,
+      },
+      select: { id: true, fullName: true, status: true },
+    })
+    return NextResponse.json(record, { status: 201 })
+  } catch (err) {
+    // The unique index on (programmeId, userId) is what stops a beneficiary
+    // holding two forms. Reported as a conflict rather than a server error.
+    if ((err as { code?: string }).code === 'P2002') {
+      return NextResponse.json(
+        { error: 'You already have a beneficiary form for this programme.' },
+        { status: 409 }
+      )
+    }
+    throw err
+  }
+}

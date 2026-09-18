@@ -1,12 +1,14 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
+import { tenantScope } from '@/lib/tenant-db'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/shared/DataTable'
 import { formatDate } from '@/lib/utils'
 import { ClipboardPlus } from 'lucide-react'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { AssessmentsTable } from './AssessmentsTable'
 
 const PERIOD_LABELS: Record<string, string> = {
   baseline: 'Baseline',
@@ -21,7 +23,16 @@ export default async function AssessmentsPage() {
   if (!session) redirect('/login')
   if (!['super_admin', 'facilitator'].includes(session.user.role)) redirect('/dashboard')
 
+  const scope = await tenantScope(session)
+  if (!scope) redirect('/dashboard')
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+
+  // Unscoped before this: every assessment on the platform, with the
+  // participant's name and business attached.
   const assessments = await prisma.assessment.findMany({
+    where: { innovator: { cohort: { programmeId } } },
     include: {
       innovator: { select: { firstName: true, lastName: true, businessName: true } },
     },
@@ -46,68 +57,22 @@ export default async function AssessmentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Assessments</h1>
-          <p className="text-muted-foreground mt-1">{assessments.length} total records</p>
-        </div>
+      <PageHeader
+        title="Assessments"
+        description={<>{assessments.length} total records</>}
+        actions={
+          <>
         <Button asChild>
           <Link href="/dashboard/assessments/new">
             <ClipboardPlus className="mr-2 h-4 w-4" />
             New Assessment
           </Link>
         </Button>
-      </div>
-
-      <DataTable
-        data={rows}
-        searchKeys={['innovator', 'business', 'period', 'assessedBy']}
-        csvFilename="assessments.csv"
-        columns={[
-          {
-            key: 'innovator',
-            label: 'Innovator',
-            sortable: true,
-            render: (row: Row) => (
-              <Link href={`/dashboard/innovators/${row.innovatorId}`} className="font-medium text-primary hover:underline">
-                {row.innovator}
-              </Link>
-            ),
-          },
-          { key: 'business', label: 'Business' },
-          {
-            key: 'period',
-            label: 'Period',
-            render: (row: Row) => <Badge variant="outline">{row.period}</Badge>,
-          },
-          {
-            key: 'trl',
-            label: 'TRL',
-            render: (row: Row) => <span className="font-mono font-bold text-blue-600">{row.trl}</span>,
-          },
-          {
-            key: 'brl',
-            label: 'BRL',
-            render: (row: Row) => <span className="font-mono font-bold text-green-600">{row.brl}</span>,
-          },
-          {
-            key: 'irl',
-            label: 'IRL',
-            render: (row: Row) => <span className="font-mono font-bold text-purple-600">{row.irl}</span>,
-          },
-          { key: 'assessedBy', label: 'Assessor' },
-          {
-            key: 'locked',
-            label: 'Locked',
-            render: (row: Row) => (
-              row.locked === 'Yes'
-                ? <Badge variant="secondary">Locked</Badge>
-                : <Badge variant="outline">Draft</Badge>
-            ),
-          },
-          { key: 'date', label: 'Date', sortable: true },
-        ]}
+          </>
+        }
       />
+
+      <AssessmentsTable rows={rows} />
     </div>
   )
 }

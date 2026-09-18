@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Users, UserCheck, Briefcase, Eye, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 export default async function AdminPage() {
   const session = await getSession()
@@ -41,23 +42,25 @@ export default async function AdminPage() {
 
   const ROLE_COLOURS: Record<string, string> = {
     super_admin: 'text-purple-600 bg-purple-50',
-    facilitator: 'text-blue-600 bg-blue-50',
-    mentor: 'text-green-600 bg-green-50',
-    innovator: 'text-orange-600 bg-orange-50',
-    funder_viewer: 'text-gray-600 bg-gray-50',
+    facilitator: 'text-info bg-info/10',
+    mentor: 'text-success bg-success/10',
+    innovator: 'text-warning bg-warning/10',
+    funder_viewer: 'text-gray-600 bg-muted',
   }
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Admin Panel</h1>
-          <p className="text-muted-foreground mt-1">User management and account setup</p>
-        </div>
+      <PageHeader
+        title="Admin Panel"
+        description="User management and account setup"
+        actions={
+          <>
         <Button asChild>
           <Link href="/dashboard/admin/users">Manage Users</Link>
         </Button>
-      </div>
+          </>
+        }
+      />
 
       {/* Role summary */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
@@ -73,21 +76,25 @@ export default async function AdminPage() {
         ))}
       </div>
 
-      {/* Pending innovator setup */}
+      {/* Pending innovator setup.
+          `bg-warning/10/40` carried two opacity modifiers, which Tailwind
+          cannot parse - the card rendered with no background at all. The icon
+          also used a raw palette colour instead of the warning token. */}
       {pendingSetup.length > 0 && (
-        <Card className="border-amber-200 bg-amber-50/40">
+        <Card className="border-warning/25 bg-warning/10">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600" />
-              <CardTitle className="text-base text-amber-800">
-                {pendingSetup.length} innovator{pendingSetup.length !== 1 ? 's' : ''} need profile setup
+              <AlertCircle className="h-4 w-4 text-warning" />
+              <CardTitle className="text-base text-warning">
+                {pendingSetup.length} innovator{pendingSetup.length !== 1 ? 's' : ''}{' '}
+                {pendingSetup.length === 1 ? 'needs' : 'need'} profile setup
               </CardTitle>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               {pendingSetup.map((u) => (
-                <div key={u.id} className="flex items-center justify-between rounded-md bg-white border px-3 py-2">
+                <div key={u.id} className="flex items-center justify-between rounded-md bg-card border px-3 py-2">
                   <div>
                     <p className="text-sm font-medium">{u.name}</p>
                     <p className="text-xs text-muted-foreground">{u.email} · registered {formatDate(u.createdAt)}</p>

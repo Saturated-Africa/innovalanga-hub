@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { tenantScope } from '@/lib/tenant-db'
+import { innovatorInProgramme } from '@/lib/authz'
 
 const schema = z.object({
   innovatorId: z.string().min(1),
@@ -15,8 +16,16 @@ const schema = z.object({
   irlJustification: z.string().optional(),
   mrlJustification: z.string().optional(),
   dropJustification: z.string().optional(),
-  assessedBy: z.string().min(1),
 })
+
+/**
+ * Who carried out the assessment is taken from the session, not the request.
+ *
+ * It used to be a required field in the body, which meant the name attached to
+ * a locked, audited score was whatever the client typed. An assessment is the
+ * record a funder reads to see whether a participant progressed; its author has
+ * to be the person who actually submitted it.
+ */
 
 export async function POST(req: Request) {
   const session = await getSession()
@@ -34,8 +43,22 @@ export async function POST(req: Request) {
   const {
     innovatorId, period, trlScore, brlScore, irlScore, mrlScore,
     trlJustification, brlJustification, irlJustification, mrlJustification,
-    dropJustification, assessedBy,
+    dropJustification,
   } = parsed.data
+
+  const assessedBy = session.user.name ?? session.user.email ?? 'Unknown'
+
+  // The participant has to be in the caller's programme. Without this a
+  // facilitator could file a locked score against any participant on the
+  // platform, and a locked assessment is not editable afterwards.
+  const scope = await tenantScope(session)
+  if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+  if (!(await innovatorInProgramme(innovatorId, programmeId))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   // Check for duplicate
   const existing = await prisma.assessment.findUnique({
