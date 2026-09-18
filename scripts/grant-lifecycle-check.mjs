@@ -9,6 +9,7 @@
  * a place the previous version of this module simply had no code:
  *
  *   super_admin  awards a grant with a two-tranche schedule
+ *   super_admin  approves the grant, then activates it - a Draft grant cannot pay
  *   super_admin  approves tranche 1, then records its payment
  *   innovator    reports an expense against it
  *   facilitator  queries the expense with a note
@@ -86,11 +87,23 @@ try {
     await page.close()
   }
 
-  // ---------- approve, then pay, tranche 1 ----------
+  // ---------- activate the grant, then approve and pay tranche 1 ----------
   {
     const page = await browser.newPage()
     await signIn(page, 'admin')
     await page.goto(grantUrl, { waitUntil: 'domcontentloaded' })
+
+    // A grant is created as Draft and canPayTranche refuses to pay a Draft
+    // grant. The first version of this check found exactly that: an awarded
+    // grant with a disabled payment button and no way in the UI to move it on.
+    for (const step of ['Approve it', 'Activate it']) {
+      await page.locator('button:has-text("Draft"), button:has-text("Approved")').first().click()
+      await page.locator(`text=${step}`).click()
+      await page.waitForTimeout(2_500)
+      await page.reload({ waitUntil: 'domcontentloaded' })
+    }
+    const active = await page.locator('button:has-text("Active")').count()
+    record('grant is approved and activated', active > 0)
 
     // Payment is only offered on an Approved tranche, which is the control the
     // whole schedule exists for - so approving is a step, not a formality.

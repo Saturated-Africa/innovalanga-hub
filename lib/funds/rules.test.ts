@@ -11,6 +11,8 @@ import {
   canPayTranche,
   grantBalances,
   type Tranche,
+  canChangeGrantStatus,
+  grantStatusOptions,
 } from './rules'
 
 const R = (rands: number) => toCents(rands)
@@ -275,4 +277,62 @@ test('a grant reports what is owed and what is unaccounted for', () => {
 test('nothing paid means no ratio rather than a misleading zero', () => {
   const b = grantBalances({ awarded: R(300_000), paid: 0, reported: 0, accepted: 0 })
   assert.equal(b.accountedRatio, null)
+})
+
+test('grant status: a draft grant can be approved, and an approved one activated', () => {
+  assert.equal(canChangeGrantStatus('Draft', 'Approved').allowed, true)
+  assert.equal(canChangeGrantStatus('Approved', 'Active').allowed, true)
+})
+test('grant status: a draft grant cannot jump straight to active', () => {
+  // Activating commits the fund's money. Skipping the approval would make the
+  // award and the commitment one click, which is the control this exists for.
+  const v = canChangeGrantStatus('Draft', 'Active')
+  assert.equal(v.allowed, false)
+  assert.match(v.reason ?? '', /draft grant cannot become active/i)
+})
+test('grant status: an approved grant can be sent back to draft for reworking', () => {
+  assert.equal(canChangeGrantStatus('Approved', 'Draft').allowed, true)
+})
+test('grant status: a completed grant can be reopened, because late invoices are ordinary', () => {
+  assert.equal(canChangeGrantStatus('Completed', 'Active').allowed, true)
+  assert.equal(canChangeGrantStatus('Completed', 'Cancelled').allowed, false)
+})
+test('grant status: a cancellation made in error has a way back', () => {
+  assert.equal(canChangeGrantStatus('Cancelled', 'Draft').allowed, true)
+})
+test('grant status: refuses to cancel a grant that has already paid out', () => {
+  const v = canChangeGrantStatus('Active', 'Cancelled', [
+    { status: 'Paid' },
+    { status: 'Pending' },
+  ])
+  assert.equal(v.allowed, false)
+  assert.match(v.reason ?? '', /refund/i)
+})
+test('grant status: allows cancelling while nothing has been paid', () => {
+  const v = canChangeGrantStatus('Active', 'Cancelled', [
+    { status: 'Approved' },
+    { status: 'Cancelled' },
+  ])
+  assert.equal(v.allowed, true)
+})
+test('grant status: refuses a move to the state it is already in', () => {
+  const v = canChangeGrantStatus('Active', 'Active')
+  assert.equal(v.allowed, false)
+  assert.match(v.reason ?? '', /already active/i)
+})
+test('grant status: grantStatusOptions never offers the current state', () => {
+  for (const from of [
+    'Draft', 'Approved', 'Active', 'Suspended', 'Completed', 'Cancelled',
+  ] as const) {
+    assert.equal(grantStatusOptions(from).includes(from), false, from)
+  }
+})
+test('grant status: every offered option is actually allowed, so no menu item is a dead end', () => {
+  for (const from of [
+    'Draft', 'Approved', 'Active', 'Suspended', 'Completed', 'Cancelled',
+  ] as const) {
+    for (const to of grantStatusOptions(from)) {
+      assert.equal(canChangeGrantStatus(from, to).allowed, true, `${from} -> ${to}`)
+    }
+  }
 })

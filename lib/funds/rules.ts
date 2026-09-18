@@ -212,6 +212,75 @@ export type GrantStatus =
   | 'Completed'
   | 'Cancelled'
 
+/**
+ * The grant lifecycle.
+ *
+ * A grant is created as Draft, and canPayTranche refuses to pay a Draft grant.
+ * So without a way to move it along, awarding one produces a grant nobody can
+ * ever be paid from - which is exactly what happened: the award screen shipped
+ * before this did, and the first grant awarded through the UI was unpayable.
+ *
+ * Draft is a facilitator's proposal. Activating it is what commits the fund's
+ * money, so that is the fund manager's act, and it is the transition the payment
+ * rule keys on.
+ */
+const GRANT_TRANSITIONS: Record<GrantStatus, GrantStatus[]> = {
+  Draft: ['Approved', 'Cancelled'],
+  // Sent back to Draft when the terms need reworking rather than refusing it.
+  Approved: ['Active', 'Draft', 'Cancelled'],
+  Active: ['Suspended', 'Completed', 'Cancelled'],
+  Suspended: ['Active', 'Completed', 'Cancelled'],
+  // Reopened, because closing a grant and then finding a late invoice is
+  // ordinary, and the alternative is a second grant that never existed.
+  Completed: ['Active'],
+  // A cancellation made in error has to have a way back, or the only remedy is
+  // awarding a duplicate.
+  Cancelled: ['Draft'],
+}
+
+export interface GrantStatusCheck {
+  allowed: boolean
+  reason?: string
+}
+
+/**
+ * Whether a grant may move between these two states.
+ *
+ * Cancelling a grant that has already paid a tranche is refused: the money has
+ * left, and the record of it leaving is what a funder reconciles against. That
+ * situation is a refund, which is a thing that happened, not a grant that never
+ * did.
+ */
+export function canChangeGrantStatus(
+  from: GrantStatus,
+  to: GrantStatus,
+  tranches: { status: TrancheStatus }[] = []
+): GrantStatusCheck {
+  if (from === to) {
+    return { allowed: false, reason: `This grant is already ${from.toLowerCase()}.` }
+  }
+  if (!GRANT_TRANSITIONS[from].includes(to)) {
+    return {
+      allowed: false,
+      reason: `A ${from.toLowerCase()} grant cannot become ${to.toLowerCase()}.`,
+    }
+  }
+  if (to === 'Cancelled' && tranches.some((t) => t.status === 'Paid')) {
+    return {
+      allowed: false,
+      reason:
+        'A tranche on this grant has already been paid, so it cannot be cancelled. ' +
+        'Record a refund instead.',
+    }
+  }
+  return { allowed: true }
+}
+
+/** The states a grant can move to from here, for building a menu. */
+export function grantStatusOptions(from: GrantStatus): GrantStatus[] {
+  return GRANT_TRANSITIONS[from]
+}
+
 export interface Tranche {
   sequence: number
   amount: Cents

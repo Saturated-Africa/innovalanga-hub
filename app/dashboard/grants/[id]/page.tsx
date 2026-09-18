@@ -9,10 +9,19 @@ import { formatDate } from '@/lib/utils'
 import { tenantScope } from '@/lib/tenant-db'
 import { systemPrisma } from '@/lib/prisma'
 import { fundSummary } from '@/lib/funds/queries'
-import { canPayTranche, toCents, fromCents, grantBalances, type Tranche } from '@/lib/funds/rules'
+import {
+  canPayTranche,
+  toCents,
+  fromCents,
+  grantBalances,
+  grantStatusOptions,
+  type Tranche,
+  type GrantStatus,
+} from '@/lib/funds/rules'
 import { ArrowLeft } from 'lucide-react'
 import { TrancheSchedule } from '@/components/funds/TrancheSchedule'
 import { ExpenditureReview } from '@/components/funds/ExpenditureReview'
+import { GrantStatusControl } from '@/components/funds/GrantStatusControl'
 
 /**
  * One grant: the award, its payment schedule, and what the participant has done
@@ -109,9 +118,12 @@ export default async function GrantPage(props: { params: Promise<{ id: string }>
         description={`${grant.innovator.firstName} ${grant.innovator.lastName} · ${grant.fund.name}${grant.reference ? ` · ${grant.reference}` : ''}`}
         actions={
           <div className="flex items-center gap-2">
-            <Badge variant={grant.status === 'Active' ? 'default' : 'secondary'}>
-              {grant.status}
-            </Badge>
+            <GrantStatusControl
+              grantId={grant.id}
+              status={grant.status}
+              options={grantStatusOptions(grant.status as GrantStatus)}
+              canChange={session.user.role === 'super_admin'}
+            />
             <Button variant="ghost" asChild>
               <Link href="/dashboard/grants">
                 <ArrowLeft className="mr-1.5 h-4 w-4" aria-hidden />
@@ -121,6 +133,13 @@ export default async function GrantPage(props: { params: Promise<{ id: string }>
           </div>
         }
       />
+
+      {grant.status === 'Draft' && (
+        <p className="max-w-prose rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+          This grant is still a draft, so no tranche on it can be paid. Approving and then
+          activating it is what commits the fund&rsquo;s money to it.
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Awarded" value={money(balances.awarded)} />
