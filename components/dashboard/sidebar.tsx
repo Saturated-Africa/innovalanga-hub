@@ -191,6 +191,15 @@ const NAV_GROUPS: NavGroup[] = [
         roles: ['super_admin', 'facilitator', 'funder_viewer'],
       },
       {
+        // The participant's own side of the same thing. Without this link the
+        // page exists and nobody can find it, which is how reporting stops
+        // happening and every grant reads as unaccounted for.
+        label: 'My Grant',
+        href: '/dashboard/innovator/grant',
+        icon: HandCoins,
+        roles: ['innovator'],
+      },
+      {
         label: 'Project Finance',
         href: '/dashboard/finance',
         icon: Wallet,

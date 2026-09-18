@@ -51,6 +51,23 @@ export async function callerMentorId(session: Session): Promise<string | null> {
 }
 
 /**
+ * The participant record belonging to the caller, or null if they are not one.
+ *
+ * The counterpart to callerMentorId, and needed for the same reason: a
+ * participant's own row is not identified by anything in the session, so a
+ * route that means "this person's own grant" has to resolve it rather than
+ * trust an id from the request.
+ */
+export async function callerInnovatorId(session: Session): Promise<string | null> {
+  if (session.user.role !== 'innovator') return null
+  const profile = await prisma.innovatorProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true },
+  })
+  return profile?.id ?? null
+}
+
+/**
  * Confirm the caller may act on this booking.
  *
  * A mentor may act only on bookings assigned to them. Programme admins may act

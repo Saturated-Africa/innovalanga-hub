@@ -9,6 +9,7 @@ import { tenantScope } from '@/lib/tenant-db'
 import { grantSummaries, programmeAllocation } from '@/lib/funds/queries'
 import { fromCents } from '@/lib/funds/rules'
 import { HandCoins } from 'lucide-react'
+import { AwardGrantDialog } from '@/components/funds/AwardGrantDialog'
 
 /**
  * Grants in this programme.
@@ -19,6 +20,8 @@ import { HandCoins } from 'lucide-react'
  */
 
 const VIEWERS = ['super_admin', 'facilitator', 'funder_viewer']
+/** Awarding is staff work. A funder views the register; it does not spend from it. */
+const MAY_AWARD = ['super_admin', 'facilitator']
 
 export default async function GrantsPage() {
   const session = await getSession()
@@ -29,9 +32,20 @@ export default async function GrantsPage() {
   if (!scope) redirect('/dashboard')
   const { db: prisma } = scope
 
-  const [grants, allocation] = await Promise.all([
+  const canAward = MAY_AWARD.includes(session.user.role)
+
+  const [grants, allocation, participants] = await Promise.all([
     grantSummaries(prisma),
     programmeAllocation(prisma),
+    // Only fetched for the roles that can act on it. A funder has no use for a
+    // participant list and, being the role with the PII restrictions, is the
+    // last one that should be handed names it did not ask for.
+    canAward
+      ? prisma.innovatorProfile.findMany({
+          select: { id: true, firstName: true, lastName: true },
+          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        })
+      : Promise.resolve([]),
   ])
 
   const awaiting = grants.filter((g) => g.payableCount > 0).length
@@ -42,6 +56,21 @@ export default async function GrantsPage() {
       <PageHeader
         title="Grants"
         description="Awards to participants, paid in tranches as each one is approved."
+        actions={
+          canAward ? (
+            <AwardGrantDialog
+              funds={allocation.funds.map((f) => ({
+                fundId: f.fundId,
+                fundName: f.fundName,
+                remaining: fromCents(f.allocated - f.awarded),
+              }))}
+              participants={participants.map((p) => ({
+                id: p.id,
+                name: `${p.firstName} ${p.lastName}`,
+              }))}
+            />
+          ) : undefined
+        }
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
