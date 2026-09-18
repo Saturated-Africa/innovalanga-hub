@@ -2,6 +2,7 @@
 import { App, Aspects, Tags } from 'aws-cdk-lib'
 import { AwsSolutionsChecks, NagSuppressions } from 'cdk-nag'
 import { NetworkStack } from '../lib/network-stack'
+import { DatabaseVolumeStack } from '../lib/database-volume'
 import { DataStack } from '../lib/data-stack'
 import { AppStack } from '../lib/app-stack'
 import { SchedulerStack } from '../lib/scheduler-stack'
@@ -43,6 +44,20 @@ const siteAddress =
   (isProd ? 'hub.innovalanga.co.za' : 'sandbox.innovalanga.co.za')
 
 /**
+ * Additional browser origins for the documents bucket.
+ *
+ * The sandbox is reached on its Elastic IP because the hostname above was never
+ * pointed at it, so the CORS rule derived from `siteAddress` matched nothing and
+ * uploads failed a preflight with no useful error. Comma separated:
+ *
+ *   npx cdk deploy InnovalangaDataSandbox -c corsOrigins=http://13.246.217.230
+ */
+const extraCorsOrigins: string[] = (app.node.tryGetContext('corsOrigins') ?? '')
+  .split(',')
+  .map((o: string) => o.trim())
+  .filter(Boolean)
+
+/**
  * 'container' keeps Postgres on the application instance, which is what fits
  * the current cost target. 'rds' provisions managed Postgres with automated
  * backups and point in time recovery.
@@ -63,6 +78,33 @@ const database: 'container' | 'rds' =
  * The wildcard below covers the global Anthropic profiles without granting
  * access to every model in the catalogue.
  */
+/**
+ * Where alarms are sent.
+ *
+ *   npx cdk deploy InnovalangaAppSandbox -c alertEmail=someone@example.com
+ *
+ * Optional. The topic exists either way, so an alarm still has somewhere to go
+ * and a history to read; without a subscription nobody is told. AWS sends a
+ * confirmation link to the address and delivers nothing until it is clicked.
+ */
+const alertEmail = app.node.tryGetContext('alertEmail') as string | undefined
+
+/**
+ * The machine image, pinned to the one currently running.
+ *
+ * Without this, CDK resolves "latest Amazon Linux 2023" on every synth, and an
+ * unrelated change - an alarm, an IAM statement - replaces the instance the
+ * moment AWS publishes a new image. That has happened here, and it cost the
+ * database.
+ *
+ * Committed rather than left to context so the value is reviewed in a diff
+ * like any other change. Moving to a newer image is then a deliberate act with
+ * its own commit, and `-c machineImageId=` overrides it for a one-off.
+ */
+const machineImageId =
+  (app.node.tryGetContext('machineImageId') as string | undefined) ??
+  'ami-09fde531663106cb0'
+
 const bedrockModelArnPattern =
   app.node.tryGetContext('bedrockModelArn') ?? `arn:aws:bedrock:*:${account ?? '*'}:inference-profile/global.anthropic.*`
 
@@ -71,12 +113,35 @@ const bedrockModelArnPattern =
  * -------------------------------------------------------------------------- */
 const network = new NetworkStack(app, stackName('Network'), { env, environment })
 
+/**
+ * The database disk, in a stack of its own.
+ *
+ * Kept apart from the application stack because the two have opposite
+ * lifecycles: the instance is disposable and gets replaced by routine changes,
+ * while its data is the one thing that must not be. Both termination protection
+ * and a retain policy are on in every environment, sandbox included, because a
+ * sandbox is precisely where a routine change goes wrong.
+ *
+ * The zone is pinned: an EBS volume attaches only within its own availability
+ * zone, so the instance and the volume have to agree, and agreeing by accident
+ * is not good enough.
+ */
+const databaseAz =
+  app.node.tryGetContext('databaseAz') ?? `${env.region}a`
+
+const databaseVolume = new DatabaseVolumeStack(app, stackName('DatabaseVolume'), {
+  env,
+  environment,
+  availabilityZone: databaseAz,
+})
+
 const data = new DataStack(app, stackName('Data'), {
   env,
   vpc: network.vpc,
   environment,
   database,
   siteAddress,
+  extraCorsOrigins,
 })
 
 const appStack = new AppStack(app, stackName('App'), {
@@ -89,6 +154,8 @@ const appStack = new AppStack(app, stackName('App'), {
   database,
   environment,
   bedrockModelArnPattern,
+  alertEmail,
+  machineImageId,
 })
 
 const scheduler = new SchedulerStack(app, stackName('Scheduler'), {

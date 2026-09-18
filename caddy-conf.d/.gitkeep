@@ -1,0 +1,7 @@
+Generated Caddy site blocks live here.
+
+deploy.sh writes ip-redirect.caddy into this directory when the site has a real
+hostname, and removes it when it does not. The Caddyfile imports the directory
+with a glob, which matches nothing when it is empty rather than failing.
+
+Nothing in here should be edited by hand: the deploy overwrites it.

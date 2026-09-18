@@ -6,6 +6,12 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager'
 import type { Construct } from 'constructs'
 
 export interface DataStackProps extends StackProps {
+  /**
+   * Extra browser origins permitted to PUT to the documents bucket, beyond the
+   * configured site address. See the CORS block below.
+   */
+  extraCorsOrigins?: string[]
+
   vpc: ec2.Vpc
   /**
    * 'production' protects everything from deletion. 'sandbox' makes the whole
@@ -66,7 +72,27 @@ export class DataStack extends Stack {
       // browser with an opaque CORS error rather than a useful message.
       cors: [
         {
-          allowedOrigins: [`https://${props.siteAddress}`],
+          // Both schemes, deliberately.
+          //
+          // A deployment reached by IP address cannot hold a certificate, so it
+          // is served over plain http and its browser origin is http://<addr>.
+          // Listing only the https origin meant every browser upload on such an
+          // environment failed with an opaque CORS error, which is how the
+          // sandbox went its whole life without a single working upload.
+          //
+          // On a real hostname the site redirects http to https before any
+          // upload happens, so the extra origin is never exercised there.
+          allowedOrigins: [
+            `https://${props.siteAddress}`,
+            `http://${props.siteAddress}`,
+            // Any address the app is genuinely reached on but which is not the
+            // configured site address. The sandbox is served on a bare Elastic
+            // IP because its hostname was never pointed here, so the rule built
+            // from siteAddress alone matched nothing and every browser upload
+            // failed a preflight. Supplied as
+            //   -c corsOrigins=http://a.b.c.d,https://other
+            ...(props.extraCorsOrigins ?? []),
+          ],
           allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET],
           allowedHeaders: ['*'],
           exposedHeaders: ['ETag'],
@@ -129,6 +155,14 @@ export class DataStack extends Stack {
         // handles them. ENCRYPTION_KEY is NOT generated: it must match the key
         // that encrypted any existing idNumberEncrypted values byte for byte,
         // or those records become permanently unreadable.
+        //
+        // The placeholder below is 25 characters and is NOT a usable key. The
+        // sandbox ran with it in place for its whole life, because the previous
+        // encryption code padded any short value out to 32 bytes and carried on
+        // without complaint. lib/encryption.ts now refuses anything under 32
+        // characters, so a deployment that has not had a real key set will fail
+        // loudly at the point of use instead of encrypting under a key that is
+        // written down in this file. Generate one with: openssl rand -hex 32
         secretStringTemplate: JSON.stringify({
           ENCRYPTION_KEY: 'REPLACE_WITH_EXISTING_KEY',
           RESEND_API_KEY: 'REPLACE_AFTER_DEPLOY',

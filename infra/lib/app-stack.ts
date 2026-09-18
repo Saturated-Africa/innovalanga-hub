@@ -3,6 +3,10 @@ import * as dlm from 'aws-cdk-lib/aws-dlm'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import * as ecr from 'aws-cdk-lib/aws-ecr'
 import * as iam from 'aws-cdk-lib/aws-iam'
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
+import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions'
+import * as sns from 'aws-cdk-lib/aws-sns'
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions'
 import type * as s3 from 'aws-cdk-lib/aws-s3'
 import type * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager'
 import type { Construct } from 'constructs'
@@ -17,6 +21,34 @@ export interface AppStackProps extends StackProps {
   environment: 'sandbox' | 'production'
   /** Bedrock inference profile the instance is allowed to invoke. */
   bedrockModelArnPattern: string
+  /**
+   * Where to send alarms.
+   *
+   * Optional, and the topic is created either way: an alarm with nowhere to
+   * go still shows in the console and still has a history, which is more than
+   * existed before. Supplied with `-c alertEmail=...`, and AWS sends a
+   * confirmation link that has to be clicked before anything is delivered.
+   */
+  alertEmail?: string
+  /**
+   * The machine image to run, pinned.
+   *
+   * Left unset, CDK resolves "the latest Amazon Linux 2023", which is an SSM
+   * parameter that AWS updates whenever it publishes a new image. That makes
+   * every deploy of this stack a coin flip: a change to an IAM policy or an
+   * alarm silently replaces the instance, because the image underneath it moved.
+   *
+   * That is not theoretical. It happened, and it destroyed the database, which
+   * at the time lived on the instance's root volume. The database is now on a
+   * retained volume and a replacement is survivable - but survivable is not the
+   * same as wanted, and infrastructure changes should not carry an unrelated
+   * outage with them.
+   *
+   * Pinned, a deploy changes what it says it changes. Moving to a newer image
+   * becomes a deliberate act: update this value, read the diff, choose when.
+   * Set with `-c machineImageId=ami-...`.
+   */
+  machineImageId?: string
 }
 
 /**
@@ -91,13 +123,68 @@ export class AppStack extends Stack {
       ],
     })
 
-    // Documents: scoped to the prefix the application actually writes, which is
-    // innovators/<id>/documents/<uuid>.<ext>.
+    // Documents: scoped to the prefixes the application actually writes, rather
+    // than the whole bucket. Two of them, and they are kept separate because
+    // they hold different things under different retention expectations:
+    //
+    //   innovators/<id>/documents/<uuid>.<ext>   participant documents
+    //   finance/<projectId>/proof/<uuid>.<ext>   invoices, proof of payment,
+    //                                            bank statements
+    //
+    // A grant that named only the first is why financial evidence upload failed
+    // with an access denial the first time it was attempted. Adding a prefix
+    // here is the deliberate act it should be.
     props.documents.grantReadWrite(role, 'innovators/*')
+    props.documents.grantReadWrite(role, 'finance/*')
     // Nightly database dumps are write only from the instance's point of view.
     props.backups.grantPut(role)
     props.appSecret.grantRead(role)
     this.repository.grantPull(role)
+
+    /* The database volume.
+     *
+     * A replaced instance has to find its own data disk and claim it, so it
+     * needs to look volumes up and attach one to itself. Describe cannot be
+     * scoped to a resource - the API does not support it - so the narrowing is
+     * on the attach, which is restricted to volumes carrying this deployment's
+     * tag. The instance cannot attach an arbitrary volume, and cannot detach
+     * anything at all: a detach here would be a way to take the database away
+     * from a healthy instance.
+     */
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['ec2:DescribeVolumes'],
+        resources: ['*'],
+      })
+    )
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['ec2:AttachVolume'],
+        resources: [
+          `arn:aws:ec2:${this.region}:${this.account}:instance/*`,
+          `arn:aws:ec2:${this.region}:${this.account}:volume/*`,
+        ],
+        conditions: {
+          StringEquals: {
+            'aws:ResourceTag/Name': `innovalanga-${props.environment}-postgres`,
+          },
+        },
+      })
+    )
+
+    /* Publishing its own health.
+     *
+     * The nightly backup writes one datapoint when it succeeds. PutMetricData
+     * cannot be scoped to a resource, so it is narrowed by namespace instead -
+     * this role can write Innovalanga metrics and nothing else.
+     */
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['cloudwatch:PutMetricData'],
+        resources: ['*'],
+        conditions: { StringEquals: { 'cloudwatch:namespace': 'Innovalanga' } },
+      })
+    )
 
     // Bedrock.
     //
@@ -142,10 +229,90 @@ export class AppStack extends Stack {
       'echo "/swapfile none swap sw 0 0" >> /etc/fstab',
 
       'mkdir -p /opt/innovalanga',
+
+      /* ---------------------------------------------------------------- *
+       * The database's own disk.
+       *
+       * This instance is replaced whenever AWS publishes a new Amazon Linux
+       * image, because the machine image is resolved at deploy time rather
+       * than pinned. That is not a fault to design around - an instance that
+       * cannot be replaced is worse - but it did once destroy the database,
+       * which lived on the root volume and went with it.
+       *
+       * So the data lives on a volume in its own stack, retained and
+       * termination-protected, and a fresh instance claims it on boot. The
+       * volume is found by tag rather than by an id written into this file:
+       * an id here would have to be updated by hand every time the volume
+       * stack was recreated, and would be wrong silently.
+       *
+       * Every step is idempotent. An instance that already has it mounted,
+       * or a volume already attached, passes straight through.
+       * ---------------------------------------------------------------- */
+      `DATA_VOLUME_NAME=innovalanga-${props.environment}-postgres`,
+      'DATA_MOUNT=/var/lib/innovalanga/pgdata',
+      'mkdir -p "$DATA_MOUNT"',
+      "TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 300')",
+      'IID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)',
+      'AZ=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone)',
+      'REGION=${AZ%?}',
+      'VOL=$(aws ec2 describe-volumes --region "$REGION"' +
+        ' --filters "Name=tag:Name,Values=$DATA_VOLUME_NAME" "Name=availability-zone,Values=$AZ"' +
+        ' --query "Volumes[0].VolumeId" --output text || echo None)',
+      // A missing volume is reported and the boot continues. The alternative is
+      // an instance that never finishes starting and cannot be reached to fix.
+      'if [ "$VOL" = "None" ] || [ -z "$VOL" ]; then',
+      '  echo "WARNING: no volume tagged $DATA_VOLUME_NAME in $AZ" >> /opt/innovalanga/STATUS',
+      'else',
+      '  HOLDER=$(aws ec2 describe-volumes --region "$REGION" --volume-ids "$VOL" --query "Volumes[0].Attachments[0].InstanceId" --output text)',
+      '  if [ "$HOLDER" = "$IID" ]; then',
+      '    echo "Database volume $VOL already attached" >> /opt/innovalanga/STATUS',
+      '  else',
+      // The instance being replaced still holds the volume at this point.
+      // CloudFormation creates the replacement first and deletes the old one
+      // afterwards, so a new instance that simply gave up here would come up
+      // without its database - which is the one scenario this whole mechanism
+      // exists for. Wait for the outgoing instance to let go.
+      '    for _ in $(seq 1 60); do',
+      '      STATE=$(aws ec2 describe-volumes --region "$REGION" --volume-ids "$VOL" --query "Volumes[0].State" --output text)',
+      '      [ "$STATE" = "available" ] && break',
+      '      sleep 10',
+      '    done',
+      '    if [ "$STATE" != "available" ]; then',
+      '      echo "WARNING: volume $VOL still held by $HOLDER after 10 minutes" >> /opt/innovalanga/STATUS',
+      '    else',
+      '      aws ec2 attach-volume --region "$REGION" --volume-id "$VOL" --instance-id "$IID" --device /dev/sdg',
+      '      aws ec2 wait volume-in-use --region "$REGION" --volume-ids "$VOL"',
+      '    fi',
+      '  fi',
+      // Nitro presents EBS as NVMe, so the requested device name is not what
+      // appears. The volume id is in the device serial, which is the only
+      // reliable way to tell one disk from another here.
+      '  SERIAL=$(echo "$VOL" | tr -d "-")',
+      '  DEV=""',
+      '  for _ in $(seq 1 30); do',
+      '    DEV=$(lsblk -dn -o NAME,SERIAL | while read -r n sn; do [ "$sn" = "$SERIAL" ] && echo "/dev/$n"; done | head -1)',
+      '    [ -n "$DEV" ] && break',
+      '    sleep 2',
+      '  done',
+      '  if [ -z "$DEV" ]; then',
+      '    echo "WARNING: volume $VOL attached but no matching device appeared" >> /opt/innovalanga/STATUS',
+      '  else',
+      // Only ever formatted when genuinely blank. A stray mkfs here is the one
+      // action in this file that would destroy the thing it exists to protect.
+      '    blkid "$DEV" >/dev/null 2>&1 || mkfs.xfs -q "$DEV"',
+      '    UUID=$(blkid -s UUID -o value "$DEV")',
+      // nofail: a volume that cannot be mounted degrades to a database that
+      // will not start, not an instance stuck in its boot sequence.
+      '    grep -q "$UUID" /etc/fstab || echo "UUID=$UUID $DATA_MOUNT xfs defaults,noatime,nofail 0 2" >> /etc/fstab',
+      '    mountpoint -q "$DATA_MOUNT" || mount "$DATA_MOUNT"',
+      '    echo "Database volume $VOL mounted at $DATA_MOUNT" >> /opt/innovalanga/STATUS',
+      '  fi',
+      'fi',
+
       // The compose file, Caddyfile and the environment assembly script are
       // placed here by the deploy runbook rather than baked into user data, so
       // a configuration change does not require replacing the instance.
-      'echo "Instance ready. Deploy the application per infra/RUNBOOK.md" > /opt/innovalanga/STATUS'
+      'echo "Instance ready. Deploy the application per infra/RUNBOOK.md" >> /opt/innovalanga/STATUS'
     )
 
     this.instance = new ec2.Instance(this, 'AppInstance', {
@@ -157,9 +324,11 @@ export class AppStack extends Stack {
         ec2.InstanceClass.BURSTABLE4_GRAVITON,
         ec2.InstanceSize.SMALL
       ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023({
-        cpuType: ec2.AmazonLinuxCpuType.ARM_64,
-      }),
+      machineImage: props.machineImageId
+        ? ec2.MachineImage.genericLinux({ [this.region]: props.machineImageId })
+        : ec2.MachineImage.latestAmazonLinux2023({
+            cpuType: ec2.AmazonLinuxCpuType.ARM_64,
+          }),
       securityGroup: this.securityGroup,
       role,
       userData,
@@ -183,6 +352,104 @@ export class AppStack extends Stack {
           }),
         },
       ],
+    })
+
+    /* ------------------------------------------------------------------ *
+     * Alarms.
+     *
+     * There were none. Every check on this platform was something a person had
+     * to remember to run, which means the first sign of a failed backup would
+     * have been needing one and finding it missing.
+     *
+     * Two things are watched, chosen because they are the failures that are
+     * silent. A crashed site announces itself; a backup that quietly stopped
+     * three weeks ago does not.
+     * ------------------------------------------------------------------ */
+    const alarms = new sns.Topic(this, 'Alarms', {
+      topicName: `innovalanga-${props.environment}-alarms`,
+      displayName: `Innovalanga ${props.environment} alarms`,
+      // Refuse plaintext publishes. An alarm names the system, the environment
+      // and what has failed, which is a useful map for anybody listening.
+      enforceSSL: true,
+    })
+
+    if (props.alertEmail) {
+      // AWS sends a confirmation link. Until somebody clicks it, nothing is
+      // delivered - so a topic with a subscription is not yet proof of an alert
+      // that works. Sending a test alarm is the only way to know.
+      alarms.addSubscription(new subscriptions.EmailSubscription(props.alertEmail))
+    }
+
+    /*
+     * The backup stopped.
+     *
+     * The metric is written only on success, so its absence is the signal.
+     * Missing data is therefore treated as breaching rather than ignored, which
+     * is the opposite of the CloudWatch default and the entire point: the
+     * failure being guarded against is the script not running at all, and a
+     * script that is not running publishes nothing to be evaluated.
+     *
+     * Twenty-six hourly periods rather than twenty-four, so a backup that runs
+     * a little late does not page anybody.
+     */
+    const backupAlarm = new cloudwatch.Alarm(this, 'BackupStopped', {
+      alarmName: `innovalanga-${props.environment}-backup-stopped`,
+      alarmDescription:
+        'No successful database backup in 26 hours. The nightly dump has failed or stopped running. ' +
+        'Check: sudo /usr/local/bin/innovalanga-backup.sh on the instance.',
+      metric: new cloudwatch.Metric({
+        namespace: 'Innovalanga',
+        metricName: 'BackupSucceeded',
+        dimensionsMap: { Environment: props.environment },
+        statistic: 'Sum',
+        period: Duration.hours(1),
+      }),
+      threshold: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 26,
+      datapointsToAlarm: 26,
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    })
+    backupAlarm.addAlarmAction(new actions.SnsAction(alarms))
+    backupAlarm.addOkAction(new actions.SnsAction(alarms))
+
+    /*
+     * The backup shrank.
+     *
+     * A dump that halves overnight is usually a table that stopped being
+     * dumped, and it restores perfectly - it is simply missing things. The
+     * backup script already refuses an implausibly small file; this catches the
+     * slower version, where it shrinks by enough to matter and not enough to
+     * trip that check.
+     *
+     * Missing data is ignored here because the alarm above already covers
+     * absence, and two alarms for one silence is noise.
+     */
+    const shrinkAlarm = new cloudwatch.Alarm(this, 'BackupShrank', {
+      alarmName: `innovalanga-${props.environment}-backup-shrank`,
+      alarmDescription:
+        'The database dump is much smaller than it has been. Something may have stopped being backed up.',
+      metric: new cloudwatch.Metric({
+        namespace: 'Innovalanga',
+        metricName: 'BackupSizeBytes',
+        dimensionsMap: { Environment: props.environment },
+        statistic: 'Minimum',
+        period: Duration.hours(24),
+      }),
+      // Deliberately a fixed floor rather than a comparison with yesterday.
+      // Anomaly detection needs a fortnight of history to be useful and is
+      // billed per alarm; a floor catches the case that matters, which is a
+      // dump collapsing to almost nothing.
+      threshold: 10_000,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    })
+    shrinkAlarm.addAlarmAction(new actions.SnsAction(alarms))
+
+    new CfnOutput(this, 'AlarmTopicArn', {
+      value: alarms.topicArn,
+      description: 'Subscribe an address here to receive alarms',
     })
 
     // Tagged so the snapshot policy below can find the volume.

@@ -1,5 +1,15 @@
 # TLS is obtained automatically from Let's Encrypt, which requires the site
 # address to resolve to this instance's Elastic IP before the container starts.
+
+# Generated site blocks, written by infra/deploy.sh.
+#
+# Currently just the redirect from the bare IP address to the hostname. It is
+# generated rather than written here because it can only exist when the site has
+# a real hostname: on an IP-only deployment SITE_ADDRESS is :80, and a second
+# block on the same address would stop Caddy starting at all.
+#
+# A glob that matches nothing is not an error, so an empty directory is fine.
+import /etc/caddy/conf.d/*.caddy
 {$SITE_ADDRESS} {
 	encode zstd gzip
 
