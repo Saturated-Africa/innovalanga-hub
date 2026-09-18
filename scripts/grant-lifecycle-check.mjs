@@ -1,0 +1,198 @@
+/**
+ * Walks one grant through its whole life in a real browser, across three roles.
+ *
+ * This is a one-off check rather than a committed spec, because every run awards
+ * a real grant and consumes part of a programme's allocation. A permanent test
+ * doing that needs a teardown story first; this needs an answer today.
+ *
+ * It exists because the build tells you nothing about any of this. Each step is
+ * a place the previous version of this module simply had no code:
+ *
+ *   super_admin  awards a grant with a two-tranche schedule
+ *   super_admin  approves tranche 1, then records its payment
+ *   innovator    reports an expense against it
+ *   facilitator  queries the expense with a note
+ *   innovator    answers the query
+ *   facilitator  accepts it, and the unaccounted figure moves
+ *
+ * Run: node scripts/grant-lifecycle-check.mjs
+ */
+import { chromium } from '@playwright/test'
+
+const BASE = process.env.E2E_BASE_URL ?? 'https://hub.innovalanga.co.za'
+const STAMP = Date.now().toString().slice(-6)
+const AWARD = 400 // Small on purpose: every run spends the allocation.
+
+const ACCOUNTS = {
+  admin: { email: 'admin@innovalanga.co.za', password: 'Admin@1234' },
+  facilitator: { email: 'facilitator@innovalanga.co.za', password: 'Facilitator@1234' },
+  innovator: { email: 'zanele@innovalanga.co.za', password: 'Innovator@1234' },
+}
+
+const results = []
+function record(step, ok, detail = '') {
+  results.push({ step, ok, detail })
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${step}${detail ? ` — ${detail}` : ''}`)
+}
+
+async function signIn(page, who) {
+  const { email, password } = ACCOUNTS[who]
+  await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
+  await page.fill('#email', email)
+  await page.fill('#password', password)
+  await page.click('button[type=submit]')
+  await page.waitForURL((u) => !u.pathname.includes('/login'), { timeout: 45_000 })
+  // Asserting the landing URL, not the status code. A valid session that the
+  // middleware cannot see redirects to /login with a 200, which is exactly the
+  // bug a status check missed on this deployment once already.
+  if (page.url().includes('/login')) throw new Error(`${who} bounced back to /login`)
+}
+
+const browser = await chromium.launch()
+let grantUrl = null
+
+try {
+  // ---------- award ----------
+  {
+    const page = await browser.newPage()
+    await signIn(page, 'admin')
+    await page.goto(`${BASE}/dashboard/grants`, { waitUntil: 'domcontentloaded' })
+
+    await page.click('button:has-text("Award a grant")')
+    await page.waitForSelector('text=Payment schedule', { timeout: 15_000 })
+
+    // Selects are Radix triggers, so they are opened and chosen, not typed into.
+    await page.click('#grant-fund')
+    await page.click('[role=option]')
+    await page.click('#grant-participant')
+    await page.locator('[role=option]').first().click()
+    await page.click('#grant-entity-type')
+    await page.locator('[role=option]').first().click()
+
+    await page.fill('#grant-entity-name', `Lifecycle Check ${STAMP}`)
+    await page.fill('#grant-purpose', 'Automated check of the grant lifecycle.')
+    await page.fill('#grant-amount', String(AWARD))
+
+    await page.click('button:has-text("Add a tranche")')
+    await page.click('button:has-text("Split evenly")')
+
+    const reconciliation = await page.locator('text=matching the award').count()
+    record('tranche reconciliation reaches zero', reconciliation > 0)
+
+    await page.click('button:has-text("Award the grant")')
+    await page.waitForURL(/\/dashboard\/grants\/[^/]+$/, { timeout: 45_000 })
+    grantUrl = page.url()
+    record('super_admin awards a grant', true, grantUrl.split('/').pop())
+    await page.close()
+  }
+
+  // ---------- approve, then pay, tranche 1 ----------
+  {
+    const page = await browser.newPage()
+    await signIn(page, 'admin')
+    await page.goto(grantUrl, { waitUntil: 'domcontentloaded' })
+
+    // Payment is only offered on an Approved tranche, which is the control the
+    // whole schedule exists for - so approving is a step, not a formality.
+    await page.locator('button:has-text("Approve")').first().click()
+    await page.waitForTimeout(3_000)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    const approved = await page.locator('text=Approved').count()
+    record('tranche 1 is approved', approved > 0)
+
+    await page.locator('button:has-text("Record payment")').first().click()
+    await page.waitForSelector('#paidOn', { timeout: 15_000 })
+    await page.fill('#paidOn', new Date().toISOString().slice(0, 10))
+    // The dialog's own confirm carries the same words as the trigger, so the
+    // last match is the one inside it.
+    await page.locator('button:has-text("Record payment")').last().click()
+    await page.waitForTimeout(3_000)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    const paid = await page.locator('text=Paid').count()
+    record('tranche 1 is paid', paid > 0)
+    await page.close()
+  }
+
+  // ---------- participant reports an expense ----------
+  {
+    const page = await browser.newPage()
+    await signIn(page, 'innovator')
+    await page.goto(`${BASE}/dashboard/innovator/grant`, { waitUntil: 'domcontentloaded' })
+
+    const visible = await page.locator(`text=Lifecycle Check ${STAMP}`).count()
+    record('participant sees their own grant', visible > 0)
+
+    await page.click('button:has-text("Report an expense")')
+    await page.fill('#exp-date', new Date().toISOString().slice(0, 10))
+    await page.fill('#exp-amount', '150')
+    await page.fill('#exp-supplier', `Supplier ${STAMP}`)
+    await page.fill('#exp-description', 'Materials bought for the build.')
+    await page.click('button:has-text("Submit it")')
+    await page.waitForTimeout(3_000)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    const submitted = await page.locator(`text=Supplier ${STAMP}`).count()
+    record('participant reports an expense', submitted > 0)
+    await page.close()
+  }
+
+  // ---------- facilitator queries it ----------
+  {
+    const page = await browser.newPage()
+    await signIn(page, 'facilitator')
+    await page.goto(grantUrl, { waitUntil: 'domcontentloaded' })
+    await page.locator('button:has-text("Query")').first().click()
+    await page.fill('#review-note', 'Please attach the invoice for this amount.')
+    await page.click('button:has-text("Send the query")')
+    await page.waitForTimeout(3_000)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    const queried = await page.locator('text=Queried').count()
+    record('facilitator queries the expense', queried > 0)
+    await page.close()
+  }
+
+  // ---------- participant answers ----------
+  {
+    const page = await browser.newPage()
+    await signIn(page, 'innovator')
+    await page.goto(`${BASE}/dashboard/innovator/grant`, { waitUntil: 'domcontentloaded' })
+    const sawNote = await page.locator('text=Please attach the invoice').count()
+    record('participant sees the query note', sawNote > 0)
+
+    await page.click('button:has-text("I have sorted this out")')
+    await page.waitForTimeout(3_000)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    const back = await page.locator('text=Submitted').count()
+    record('participant answers the query', back > 0)
+    await page.close()
+  }
+
+  // ---------- facilitator accepts ----------
+  {
+    const page = await browser.newPage()
+    await signIn(page, 'facilitator')
+    await page.goto(grantUrl, { waitUntil: 'domcontentloaded' })
+    await page.locator('button:has-text("Accept")').first().click()
+    await page.waitForTimeout(3_000)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    const accepted = await page.locator('text=Accepted').count()
+    record('facilitator accepts the expense', accepted > 0)
+
+    // The whole point: accepting moves the figure a funder reads.
+    const body = await page.locator('body').innerText()
+    record(
+      'the unaccounted figure is present on the page',
+      /Unaccounted/i.test(body),
+      body.match(/Unaccounted[\s\S]{0,40}/)?.[0]?.replace(/\s+/g, ' ').trim() ?? ''
+    )
+    await page.close()
+  }
+} catch (err) {
+  record('lifecycle run', false, err.message)
+} finally {
+  await browser.close()
+}
+
+const failed = results.filter((r) => !r.ok)
+console.log(`\n${results.length - failed.length}/${results.length} checks passed`)
+if (grantUrl) console.log(`grant: ${grantUrl}`)
+process.exit(failed.length === 0 ? 0 : 1)
