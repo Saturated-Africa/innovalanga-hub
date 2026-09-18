@@ -15,7 +15,11 @@ import { Sidebar } from '@/components/dashboard/sidebar'
  * drawer behind it, so below the `md` breakpoint there was no way to navigate
  * at all. This puts the same grouped nav behind a hamburger.
  */
-export function MobileNav() {
+export function MobileNav({
+  trackers = [],
+}: {
+  trackers?: { key: string; shortLabel: string }[]
+}) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
 
@@ -33,7 +37,7 @@ export function MobileNav() {
       </SheetTrigger>
       <SheetContent side="left" className="w-72 border-white/10 p-0" hideClose>
         <SheetTitle className="sr-only">Navigation</SheetTitle>
-        <Sidebar onNavigate={() => setOpen(false)} />
+        <Sidebar onNavigate={() => setOpen(false)} trackers={trackers} />
       </SheetContent>
     </Sheet>
   )

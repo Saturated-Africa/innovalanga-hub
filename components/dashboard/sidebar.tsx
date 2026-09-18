@@ -5,20 +5,26 @@ import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard,
-  Users,
-  ClipboardList,
-  Users2,
-  Calendar,
-  BookOpen,
   Banknote,
   BarChart3,
+  BookOpen,
+  Calendar,
   CalendarCog,
-  LogOut,
-  Sparkles,
-  ShieldCheck,
+  ClipboardList,
+  ClipboardSignature,
+  HandCoins,
+  Landmark,
+  LayoutDashboard,
   LineChart,
+  LogOut,
   Shield,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
+  UserCog,
+  Users,
+  Users2,
+  Wallet,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -69,6 +75,18 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Programme',
     items: [
+      {
+        label: 'Beneficiaries',
+        href: '/dashboard/beneficiaries',
+        icon: ClipboardSignature,
+        roles: ['super_admin', 'facilitator'],
+      },
+      {
+        label: 'My Beneficiary Form',
+        href: '/dashboard/innovator/beneficiary-form',
+        icon: ClipboardSignature,
+        roles: ['innovator'],
+      },
       {
         label: 'Innovators',
         href: '/dashboard/innovators',
@@ -154,6 +172,33 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Finance',
+    items: [
+      {
+        // Funds under management: a funder's capital, not this organisation's
+        // own project budget. The two sit next to each other because an
+        // operator thinks of them together, and are separate because they
+        // answer different questions.
+        label: 'Funds',
+        href: '/dashboard/funds',
+        icon: Landmark,
+        roles: ['super_admin'],
+      },
+      {
+        label: 'Grants',
+        href: '/dashboard/grants',
+        icon: HandCoins,
+        roles: ['super_admin', 'facilitator', 'funder_viewer'],
+      },
+      {
+        label: 'Project Finance',
+        href: '/dashboard/finance',
+        icon: Wallet,
+        roles: ['super_admin'],
+      },
+    ],
+  },
+  {
     label: 'Insight',
     items: [
       {
@@ -189,14 +234,39 @@ function isItemActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+export function Sidebar({
+  onNavigate,
+  trackers = [],
+}: {
+  onNavigate?: () => void
+  /**
+   * Readiness dimensions this programme actually runs, resolved server-side.
+   *
+   * Hard-coding a link per dimension would put a dead entry in the sidebar of
+   * any programme that disables one, and a visible link the router refuses is
+   * the exact defect QA reported against the M&E menu item. Driving it from the
+   * programme's own configuration means the menu cannot describe a page that
+   * is not there.
+   */
+  trackers?: { key: string; shortLabel: string }[]
+}) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const role = session?.user?.role as UserRole | undefined
 
+  const trackerItems: NavItem[] = trackers.map((d) => ({
+    label: `${d.shortLabel} Tracker`,
+    href: `/dashboard/readiness/${d.key}`,
+    icon: TrendingUp,
+    roles: ['super_admin', 'facilitator', 'funder_viewer'],
+  }))
+
   const groups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => role && item.roles.includes(role)),
+    items: (group.label === 'Programme'
+      ? [...group.items, ...trackerItems]
+      : group.items
+    ).filter((item) => role && item.roles.includes(role)),
   })).filter((group) => group.items.length > 0)
 
   const initials = session?.user?.name
@@ -290,6 +360,19 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         >
           <LogOut className="mr-2 h-4 w-4" aria-hidden />
           Sign out
+        </Button>
+        {/* Beside sign out, which is where people look for their own account
+            rather than in a settings section they have to find. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          asChild
+          className="w-full justify-start text-white/60 hover:bg-white/[0.07] hover:text-white"
+        >
+          <Link href="/dashboard/account">
+            <UserCog className="mr-2 h-4 w-4" aria-hidden />
+            Your account
+          </Link>
         </Button>
       </div>
     </div>

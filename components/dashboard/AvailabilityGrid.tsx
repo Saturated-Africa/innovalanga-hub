@@ -223,7 +223,8 @@ export function AvailabilityGrid({ mentorId, existingSlots }: AvailabilityGridPr
       </div>
 
       <p className="text-xs text-muted-foreground">
-        All times are UTC. Innovators see SAST (UTC+2) when booking.
+        Times are shown in SAST (UTC+2) - the same times innovators see when
+        booking. They are stored as UTC internally.
         Each selected block is a 30-minute window; consecutive blocks on the same day are merged into one availability slot.
       </p>
     </div>

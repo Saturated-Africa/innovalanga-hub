@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { toCsv } from '@/lib/csv'
 import {
   Search,
   Download,
@@ -105,10 +106,12 @@ export function DataTable<T extends object>({
   }
 
   function downloadCSV() {
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const headers = columns.map((c) => esc(c.label)).join(',')
-    const rows = sorted.map((row) => columns.map((c) => esc(cellValue(row, c))).join(','))
-    const csv = [headers, ...rows].join('\n')
+    // Uses the same builder as the server exports, so a value a spreadsheet
+    // would execute as a formula is neutralised here too.
+    const csv = toCsv(
+      columns.map((c) => c.label),
+      sorted.map((row) => columns.map((c) => cellValue(row, c)))
+    )
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
