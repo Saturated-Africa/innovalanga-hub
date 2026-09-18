@@ -1,0 +1,11 @@
+# Findings reviewed and accepted, by fingerprint.
+#
+# Each line is a specific finding in a specific commit, not a rule or a path, so
+# a real secret appearing later in the same file is still reported.
+
+# .env.example documents the SHAPE of the encryption key. The value is the
+# English phrase "32-char-hex-key-for-aes-256-here", which is thirty-two
+# characters of description and has never been a key. The file exists to tell a
+# reader what to supply; the real value is generated on the instance and lives
+# only in its .env, which is not tracked.
+80c251816196bdf9ebc8c071dcd43a13aa6e0b74:.env.example:generic-api-key:10

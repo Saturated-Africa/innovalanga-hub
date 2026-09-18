@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - run: npm ci
@@ -37,8 +37,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # The test glob is recursive. It was not, so tests added under a
-      # subdirectory of lib/ ran nowhere and reported nothing - including in CI.
+      # Node must match the runtime the application ships on, which is 22.
+      # On 20 the test runner does not expand this glob: it matched nothing,
+      # reported nothing, and the job passed green having run no tests at all.
+      # CI was silent about every test in this repository until this was found.
       - name: Unit tests
         run: npm test
 
@@ -57,7 +59,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - run: npm ci
@@ -94,7 +96,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: infra/package-lock.json
 
