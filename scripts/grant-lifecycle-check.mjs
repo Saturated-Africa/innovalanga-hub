@@ -24,6 +24,9 @@ const BASE = process.env.E2E_BASE_URL ?? 'https://hub.innovalanga.co.za'
 const STAMP = Date.now().toString().slice(-6)
 const AWARD = 400 // Small on purpose: every run spends the allocation.
 
+/** Must match the account the innovator steps sign in as. */
+const PARTICIPANT = 'Zanele'
+
 const ACCOUNTS = {
   admin: { email: 'admin@innovalanga.co.za', password: 'Admin@1234' },
   facilitator: { email: 'facilitator@innovalanga.co.za', password: 'Facilitator@1234' },
@@ -34,6 +37,31 @@ const results = []
 function record(step, ok, detail = '') {
   results.push({ step, ok, detail })
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${step}${detail ? ` — ${detail}` : ''}`)
+}
+
+/**
+ * Click a control, or say why it is disabled.
+ *
+ * The first run of this script spent thirty seconds timing out on a disabled
+ * payment button while the page had "The grant has not been approved yet."
+ * printed directly underneath it. A check that ignores the answer on screen
+ * turns a one-line diagnosis into an interrogation of a stack trace.
+ */
+async function clickOrExplain(page, locator, step) {
+  const target = locator.first()
+  await target.waitFor({ state: 'visible', timeout: 20_000 })
+  if (await target.isDisabled()) {
+    const text = await page.locator('body').innerText().catch(() => '')
+    const reason =
+      text
+        .split(String.fromCharCode(10))
+        .map((line) => line.trim())
+        .find((line) =>
+          /not been approved|already been paid|being withheld|cancelled/i.test(line)
+        ) ?? 'no reason shown on the page'
+    throw new Error(`${step}: the control is disabled — ${reason.trim()}`)
+  }
+  await target.click()
 }
 
 async function signIn(page, who) {
@@ -66,7 +94,11 @@ try {
     await page.click('#grant-fund')
     await page.click('[role=option]')
     await page.click('#grant-participant')
-    await page.locator('[role=option]').first().click()
+    // By name, not by position. Taking the first option awarded the grant to
+    // whoever sorts first alphabetically while this script signs in as Zanele,
+    // so the participant step failed on a grant that was never hers - the
+    // person-scoping working correctly, reported as a defect.
+    await page.locator('[role=option]', { hasText: PARTICIPANT }).first().click()
     await page.click('#grant-entity-type')
     await page.locator('[role=option]').first().click()
 
@@ -107,13 +139,17 @@ try {
 
     // Payment is only offered on an Approved tranche, which is the control the
     // whole schedule exists for - so approving is a step, not a formality.
-    await page.locator('button:has-text("Approve")').first().click()
+    await clickOrExplain(page, page.locator('button:has-text("Approve")'), 'approve tranche 1')
     await page.waitForTimeout(3_000)
     await page.reload({ waitUntil: 'domcontentloaded' })
     const approved = await page.locator('text=Approved').count()
     record('tranche 1 is approved', approved > 0)
 
-    await page.locator('button:has-text("Record payment")').first().click()
+    await clickOrExplain(
+      page,
+      page.locator('button:has-text("Record payment")'),
+      'record payment'
+    )
     await page.waitForSelector('#paidOn', { timeout: 15_000 })
     await page.fill('#paidOn', new Date().toISOString().slice(0, 10))
     // The dialog's own confirm carries the same words as the trigger, so the
