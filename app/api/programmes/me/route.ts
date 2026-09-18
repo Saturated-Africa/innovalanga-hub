@@ -1,24 +1,21 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { resolveProgrammeId } from '@/lib/scope'
 
 /**
  * GET /api/programmes/me
- * Returns the active programmeId for the current user.
- * super_admin: first programme in DB
- * other roles: their assigned programme
+ *
+ * The programme the caller is working in. Their own assignment, or the first
+ * programme on the platform for a super_admin who has none.
+ *
+ * That rule used to be written out here as well as in three other places. It is
+ * now only in `resolveProgrammeId`, because a copy of it that drifts is a copy
+ * that answers a different question from the one the rest of the app asks.
  */
 export async function GET() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let programmeId = session.user.programmeId ?? null
-
-  if (!programmeId) {
-    // super_admin — use first programme
-    const first = await prisma.programme.findFirst({ orderBy: { createdAt: 'asc' }, select: { id: true } })
-    programmeId = first?.id ?? null
-  }
-
+  const programmeId = await resolveProgrammeId(session)
   return NextResponse.json({ programmeId })
 }

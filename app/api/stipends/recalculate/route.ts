@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { resolveProgrammeId } from '@/lib/scope'
+import { tenantScope } from '@/lib/tenant-db'
 
 const schema = z.object({
   stipendRecordId: z.string().min(1),
@@ -23,8 +24,20 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const record = await prisma.stipendRecord.findUnique({
-    where: { id: parsed.data.stipendRecordId },
+  // Scoped through the participant's cohort, as the register itself is. The
+  // lookup used to be by id alone, so a facilitator on one funder's programme
+  // could rewrite the hours and eligibility on another funder's stipend - and
+  // eligibility is what decides whether somebody gets paid.
+  const scope = await tenantScope(session)
+  if (!scope) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
+  const record = await prisma.stipendRecord.findFirst({
+    where: {
+      id: parsed.data.stipendRecordId,
+      innovator: { cohort: { programmeId } },
+    },
   })
   if (!record) return NextResponse.json({ error: 'Stipend record not found' }, { status: 404 })
 

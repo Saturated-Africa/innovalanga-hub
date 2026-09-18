@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { resolveProgrammeId, assertProgrammeInScope } from '@/lib/scope'
+import { tenantScope, tenantScopeFor } from '@/lib/tenant-db'
 
 const BeneficiarySchema = z.object({
   programmeId: z.string().min(1),
@@ -28,9 +28,11 @@ export async function GET(req: Request) {
   // Programme comes from the session, never from the query string. Trusting
   // the parameter here let any authenticated facilitator or funder read another
   // programme's data by editing the URL.
-  const programmeId = await resolveProgrammeId(session)
-  if (!programmeId) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
-
+  const scope = await tenantScope(session)
+  if (!scope) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
   const counts = await prisma.beneficiaryCount.findMany({
     where: { programmeId },
     include: { cohort: { select: { name: true } } },
@@ -55,6 +57,9 @@ export async function POST(req: Request) {
   const programmeId = await assertProgrammeInScope(session, parsed.data.programmeId)
   if (!programmeId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  // A connection for the programme that was approved, not the caller's default.
+  const prisma = await tenantScopeFor(programmeId)
+
   const count = await prisma.beneficiaryCount.create({
     data: {
       ...parsed.data,
@@ -78,6 +83,15 @@ export async function DELETE(req: Request) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-  await prisma.beneficiaryCount.delete({ where: { id } })
+  const scope = await tenantScope(session)
+  if (!scope) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
+  const { programmeId, db: prisma } = scope
+
+  // Bound to the programme as well as the id. The delete was keyed on the id
+  // alone, so a facilitator on one funder's programme could remove another
+  // funder's beneficiary counts by passing their id.
+  const removed = await prisma.beneficiaryCount.deleteMany({ where: { id, programmeId } })
+  if (removed.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
   return NextResponse.json({ ok: true })
 }

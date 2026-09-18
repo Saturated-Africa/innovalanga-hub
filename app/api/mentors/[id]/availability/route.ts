@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { canActAsMentor } from '@/lib/authz'
 
 const schema = z.object({
   slots: z.array(
@@ -21,8 +22,12 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const mentor = await prisma.mentorProfile.findUnique({ where: { id: params.id } })
   if (!mentor) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Only the mentor themselves or admin can update
-  if (session.user.role === 'mentor' && mentor.userId !== session.user.id) {
+  // The guard here used to read `if (role === 'mentor' && mentor.userId !== id)`,
+  // so the ownership test ran ONLY for mentors. Every other authenticated role
+  // fell straight through to the deleteMany below and could wipe and rewrite any
+  // mentor's entire availability. Registration is public, so that was a
+  // register-then-destroy chain against a live booking calendar.
+  if (!(await canActAsMentor(session, params.id))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

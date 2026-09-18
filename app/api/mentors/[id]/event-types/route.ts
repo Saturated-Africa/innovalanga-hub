@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { DEFAULT_EVENT_COLOR } from '@/lib/event-colors'
+import { canActAsMentor } from '@/lib/authz'
 
 const schema = z.object({
   name: z.string().min(1).max(80),
@@ -37,10 +38,7 @@ export async function POST(req: Request, { params }: Params) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const mentor = await prisma.mentorProfile.findFirst({
-    where: { id: params.id, userId: session.user.id },
-  })
-  if (!mentor && session.user.role !== 'super_admin') {
+  if (!(await canActAsMentor(session, params.id))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -67,10 +65,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const mentor = await prisma.mentorProfile.findFirst({
-    where: { id: params.id, userId: session.user.id },
-  })
-  if (!mentor && session.user.role !== 'super_admin') {
+  if (!(await canActAsMentor(session, params.id))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -83,10 +78,19 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
-  const updated = await prisma.eventType.update({
-    where: { id },
+  // `where: { id }` took the id straight from the body, unbound from the mentor
+  // in the path that was actually authorised above. Any mentor could edit any
+  // other mentor's event types by naming their id. Scoping the write to
+  // `mentorId` makes the authorised path the boundary.
+  const result = await prisma.eventType.updateMany({
+    where: { id, mentorId: params.id },
     data: parsed.data,
   })
+  if (result.count === 0) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  const updated = await prisma.eventType.findUnique({ where: { id } })
   return NextResponse.json(updated)
 }
 
@@ -94,10 +98,7 @@ export async function DELETE(req: Request, { params }: Params) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const mentor = await prisma.mentorProfile.findFirst({
-    where: { id: params.id, userId: session.user.id },
-  })
-  if (!mentor && session.user.role !== 'super_admin') {
+  if (!(await canActAsMentor(session, params.id))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -105,6 +106,12 @@ export async function DELETE(req: Request, { params }: Params) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  await prisma.eventType.delete({ where: { id } })
+  // Same unbound-id problem as PATCH above.
+  const deleted = await prisma.eventType.deleteMany({
+    where: { id, mentorId: params.id },
+  })
+  if (deleted.count === 0) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
   return NextResponse.json({ ok: true })
 }

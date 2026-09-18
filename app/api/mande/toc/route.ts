@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { resolveProgrammeId, assertProgrammeInScope } from '@/lib/scope'
+import { tenantScope, tenantScopeFor } from '@/lib/tenant-db'
 
 const ToCSchema = z.object({
   programmeId: z.string().min(1),
@@ -26,9 +26,11 @@ export async function GET(req: Request) {
   // Programme comes from the session, never from the query string. Trusting
   // the parameter here let any authenticated facilitator or funder read another
   // programme's data by editing the URL.
-  const programmeId = await resolveProgrammeId(session)
-  if (!programmeId) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
-
+  const scope = await tenantScope(session)
+  if (!scope) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
+  // Bound to `prisma` so the queries below are unchanged. This connection
+  // cannot see another programme even if a query forgets to say so.
+  const { programmeId, db: prisma } = scope
   const toc = await prisma.theoryOfChange.findUnique({ where: { programmeId } })
   return NextResponse.json(toc ?? null)
 }
@@ -48,6 +50,9 @@ export async function PUT(req: Request) {
   // Validate the supplied programme against the session before upserting.
   const programmeId = await assertProgrammeInScope(session, requestedProgrammeId)
   if (!programmeId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  // A connection for the programme that was approved, not the caller's default.
+  const prisma = await tenantScopeFor(programmeId)
 
   const toc = await prisma.theoryOfChange.upsert({
     where: { programmeId },
