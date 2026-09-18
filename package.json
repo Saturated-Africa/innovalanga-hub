@@ -16,12 +16,16 @@
     "db:migrate-event-colors": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/migrate-event-colors.ts",
     "test:scope": "node --test --experimental-strip-types lib/scope.test.ts",
     "test:tenancy": "node --test --experimental-strip-types lib/tenancy.test.ts",
-    "test": "node --test --experimental-strip-types lib/*.test.ts",
+    "test": "node --import tsx --test \"lib/**/*.test.ts\"",
     "test:redact": "node --test --experimental-strip-types lib/redact.test.ts",
     "test:ollama": "node --test --experimental-strip-types lib/ollama-protocol.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test e2e/smoke.spec.ts",
-    "test:all": "npm run typecheck && npm test && npm run test:e2e"
+    "test:all": "npm run typecheck && npm test && npm run test:e2e",
+    "finance:import": "tsx scripts/import-finance-workbook.ts",
+    "authz:probe": "node scripts/authz-probe.mjs",
+    "browser:check": "node scripts/browser-check.mjs",
+    "finance:widen-template": "tsx scripts/widen-finance-template.ts"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
@@ -56,9 +60,10 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "exceljs": "^4.4.0",
     "lucide-react": "^0.477.0",
     "next": "^14.2.35",
-    "next-auth": "^4.24.11",
+    "next-auth": "^4.24.15",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.55.0",
@@ -79,6 +84,7 @@
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.17",
     "ts-node": "^10.9.2",
+    "tsx": "^4.23.13",
     "typescript": "^5.8.3"
   }
 }

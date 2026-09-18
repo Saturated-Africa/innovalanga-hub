@@ -25,7 +25,7 @@ test('the database is reachable', async ({ request }) => {
 test('the login page carries the brand, not the shadcn default', async ({ page }) => {
   await page.goto('/login')
   await expect(page.locator('h1')).toContainText('Sign in')
-  await expect(page.getByText('Where the sun rises on African innovation.')).toBeVisible()
+  await expect(page.getByText('Innovation thrives where the sun rises.')).toBeVisible()
 
   // The sign-in button is volt with INK text. White on volt is 1.27:1, so if
   // this ever regresses the primary action becomes invisible.

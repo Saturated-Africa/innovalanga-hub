@@ -162,3 +162,151 @@
     @apply decoration-brand-volt-deep;
   }
 }
+
+
+/* ---------------------------------------------------------------------------
+   Print
+   
+   The signed beneficiary form is a funder document and gets printed or saved
+   as PDF. Printing the application around it - sidebar, header, buttons -
+   makes it unusable for that purpose, so everything outside the form is
+   dropped and the form itself is rendered as ruled boxes on white.
+   --------------------------------------------------------------------------- */
+@media print {
+  /* Ink on white regardless of the viewer's theme. A dark-mode print is a
+     wasted cartridge and an unreadable page. */
+  :root,
+  :root[data-theme='dark'],
+  :root:not([data-theme='light']) {
+    --background: 0 0% 100%;
+    --foreground: 330 3.3% 11.8%;
+    --card: 0 0% 100%;
+    --card-foreground: 330 3.3% 11.8%;
+    --muted: 0 0% 100%;
+    --muted-foreground: 0 0% 30%;
+    --border: 0 0% 65%;
+    --input: 0 0% 65%;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 11pt;
+  }
+
+  /* Undo the application frame.
+     
+     The dashboard shell is `h-screen overflow-hidden` with an internally
+     scrolling main region, which is right for an app and wrong for paper: it
+     clips the document to a single viewport height. Exported beneficiary forms
+     were losing the project details and BOTH signature blocks, which is the
+     part of the document the funder actually needs. Nothing scrolls on paper,
+     so heights are released and overflow is made visible throughout. */
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  body * {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  .h-screen {
+    height: auto !important;
+  }
+
+  main {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* The application chrome. The form is the page. */
+  aside,
+  nav,
+  header button,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Text inputs print as their value on a ruled box, not as form controls.
+     Radios and checkboxes are deliberately excluded: this rule used to catch
+     them too, which stripped the selected marker and printed a form showing
+     every option and none of the answers. */
+  .print-form input:not([type='radio']):not([type='checkbox']),
+  .print-form textarea,
+  .print-form select {
+    border: none !important;
+    background: transparent !important;
+    padding-left: 0 !important;
+    color: #000 !important;
+    -webkit-appearance: none;
+    appearance: none;
+    opacity: 1 !important;
+  }
+
+  /* The radio is drawn here rather than left to the browser's own control.
+     A native radio's fill is one of the first things a print pipeline drops,
+     and on this form the fill IS the answer. A border plus a pseudo-element
+     survives, because both are honoured under print-color-adjust: exact. */
+  .print-form input[type='radio'] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px;
+    height: 11px;
+    border: 1.2px solid #000 !important;
+    border-radius: 50%;
+    position: relative;
+    opacity: 1 !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-form input[type='radio']:checked::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border-radius: 50%;
+    background: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* An unanswered optional question should not print as an empty ruled box
+     the reader mistakes for a missing answer. */
+  .print-form textarea {
+    resize: none;
+  }
+
+  .print-form {
+    break-inside: auto;
+  }
+
+  /* Browsers strip background colour when printing to save ink. These are the
+     funder's logos on a compliance document, so they must print as issued. */
+  .print-form img {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Never split an individual labelled box or a signature across two pages.
+  
+     This used to read `.print-form > div`, which also matched the container
+     wrapping the whole form. `break-inside: avoid` on a block taller than a
+     page does not shrink it - the browser moves the entire block to a fresh
+     page instead, which left page one blank. Only the individual boxes are
+     marked now, and each one comfortably fits on a page. */
+  .print-form .print-keep {
+    break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}

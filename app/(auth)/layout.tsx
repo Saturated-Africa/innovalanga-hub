@@ -34,11 +34,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
         <div className="relative mt-8 lg:mt-0">
           <p className="max-w-md text-2xl font-bold leading-[1.15] tracking-tight text-white lg:text-4xl">
-            Where the sun rises on African innovation.
+            Innovation thrives where the sun rises.
           </p>
           <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/55 lg:mt-6">
-            Readiness tracking, mentorship and programme reporting for innovators across
-            Mpumalanga and the Free State.
+            Readiness tracking, mentorship and programme reporting for innovators
+            and the funders backing them.
           </p>
           <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-volt lg:mt-10">
             Proudly African · Tech-oriented · Future-focused

@@ -2,11 +2,16 @@
 
 ## Project overview
 
-Innovalanga Hub is a full-stack innovation progress tracker for a South African
-government-backed entrepreneurship programme operating under TIA (Technology Innovation
-Agency) and DSTI (Department of Science, Technology and Innovation). It tracks the
-business, technological, and personal development progress of youth innovators across
-two districts: Gert Sibande (Mpumalanga) and Fezile Dabi (Free State).
+Innovalanga Hub is a full-stack innovation progress tracker for youth
+entrepreneurship programmes, run by Saturated Africa. It tracks the business,
+technological and personal development progress of innovators.
+
+The platform is multi-tenant and funder-agnostic. TIA and DSTI were the first
+programmes on it, not the shape of it: regions, cohorts, participant labels,
+currency and enabled modules are all per-programme configuration. Do not hard
+code a funder, a province or a district anywhere.
+
+The slogan is "Innovation thrives where the sun rises." 
 
 This is NOT a learning management system. There are no courses, lessons, or quizzes.
 It is a structured readiness measurement, mentorship scheduling, and programme reporting

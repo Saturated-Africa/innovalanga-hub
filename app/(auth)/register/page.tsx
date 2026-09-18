@@ -16,6 +16,9 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // Honeypot. Hidden from people; automated form fillers populate it.
+  const [company, setCompany] = useState('')
+  const [openedAt] = useState(() => Date.now())
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -26,7 +29,13 @@ export default function RegisterPage() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+        company,
+        elapsedMs: Date.now() - openedAt,
+      }),
     })
 
     if (!res.ok) {
@@ -63,6 +72,22 @@ export default function RegisterPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Honeypot. Positioned off-screen rather than display:none, which some
+            fillers skip, and excluded from the accessibility tree and tab
+            order so nobody using a screen reader or keyboard ever meets it. */}
+        <div aria-hidden className="absolute left-[-9999px] h-0 w-0 overflow-hidden">
+          <label htmlFor="company">Company</label>
+          <input
+            id="company"
+            name="company"
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+          />
+        </div>
+
         <div className="space-y-1.5">
           <Label htmlFor="name">Full name</Label>
           <Input

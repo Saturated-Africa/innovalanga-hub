@@ -136,15 +136,23 @@ export function deriveRecommendations(answers: Answers): IPResult {
     reasons.push('Based on your answers, formal IP protection may not be immediately applicable. Continue developing your innovation and reassess as it matures.')
   }
 
-  // Multiple protection
+  // "Multiple Protection Types" summarises the list; it is not a member of it.
+  //
+  // It used to be pushed into `recs`, which put it in the "All applicable
+  // protection types" row as though it were a fifth category sitting beside
+  // patent and trademark. Worse, it sat second in the priority order below
+  // patent, so an innovator who needed four kinds of protection was given the
+  // single headline "Patent Required" - a narrower instruction than the
+  // assessment had actually reached. QA found the headline and the list
+  // contradicting each other on the same screen.
   const substantiveRecs = recs.filter((r) => r !== 'ReviewRequired')
-  if (substantiveRecs.length > 1) {
-    if (!recs.includes('MultipleProtection')) recs.push('MultipleProtection')
-  }
+  const needsMultiple = substantiveRecs.length > 1
 
-  // Primary recommendation: priority order
-  const priority = ['PatentRequired', 'MultipleProtection', 'TrademarkRequired', 'CopyrightApplicable', 'TradeSecret', 'ReviewRequired', 'NoProtectionNeeded']
-  const primaryRec = priority.find((p) => recs.includes(p)) ?? recs[0]
+  // Priority for the single headline when exactly one type applies.
+  const priority = ['PatentRequired', 'TrademarkRequired', 'CopyrightApplicable', 'TradeSecret', 'ReviewRequired', 'NoProtectionNeeded']
+  const primaryRec = needsMultiple
+    ? 'MultipleProtection'
+    : priority.find((p) => recs.includes(p)) ?? recs[0]
 
   return {
     recommendations: recs,
