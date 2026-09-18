@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
-import { Loader2, Plus } from 'lucide-react'
+import { Loader2, Plus, Paperclip } from 'lucide-react'
+import { uploadExpenseProof, ProofUploadError } from '@/lib/upload-expense-proof'
 
 /**
  * Reporting what a grant was spent on.
@@ -63,6 +64,7 @@ export function SubmitExpenditure({
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [file, setFile] = useState<File | null>(null)
 
   const [form, setForm] = useState({
     spentOn: '',
@@ -115,20 +117,37 @@ export function SubmitExpenditure({
           typeof body.error === 'string' ? body.error : 'Check the fields and try again.'
         )
       }
+      // The expense is saved at this point. A receipt that fails after this must
+      // not read as a failed submission, because the expense is filed either way
+      // and telling somebody it failed makes them submit it twice.
+      let proofNote = ''
+      if (file) {
+        try {
+          await uploadExpenseProof(grantId, body.id, file)
+          proofNote = ' The receipt is attached.'
+        } catch (err) {
+          proofNote =
+            err instanceof ProofUploadError
+              ? ` The expense was saved, but the receipt did not attach: ${err.message}`
+              : ' The expense was saved, but the receipt did not attach.'
+        }
+      }
+
       // Warnings are not refusals - the item was saved. Showing them matters
       // because they are what a reviewer is about to ask about.
       toast({
         title: 'Expense submitted',
         description:
-          Array.isArray(body.warnings) && body.warnings.length > 0
+          (Array.isArray(body.warnings) && body.warnings.length > 0
             ? body.warnings.join(' ')
-            : 'It is now waiting for review.',
+            : 'It is now waiting for review.') + proofNote,
       })
       setOpen(false)
       setForm({
         spentOn: '', supplier: '', description: '', amount: '',
         category: 'Operational', trancheId: '',
       })
+      setFile(null)
       router.refresh()
     } catch (err) {
       setError((err as Error).message)
@@ -240,6 +259,23 @@ export function SubmitExpenditure({
               </Select>
             </div>
           )}
+        </div>
+
+        <div className="space-y-2 border-t border-border pt-4">
+          <Label htmlFor="exp-proof" className="flex items-center gap-1.5">
+            <Paperclip className="h-3.5 w-3.5" aria-hidden />
+            Receipt or invoice
+          </Label>
+          <Input
+            id="exp-proof"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <p className="text-xs text-muted-foreground">
+            A PDF or a photo. Without one a reviewer is accepting your description on
+            trust, and a funder&rsquo;s audit asks for the document.
+          </p>
         </div>
 
         <div className="flex justify-end gap-2">

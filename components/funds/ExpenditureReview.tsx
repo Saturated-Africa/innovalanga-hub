@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
-import { Loader2, MessageCircleQuestion } from 'lucide-react'
+import { Loader2, MessageCircleQuestion, Paperclip, FileWarning } from 'lucide-react'
 
 /**
  * Reviewing what a participant reported spending.
@@ -40,6 +40,8 @@ export interface ExpenditureRow {
   status: string
   reviewedBy: string | null
   reviewNote: string | null
+  /** Evidence on file. Empty means the description is all there is. */
+  proofs: { id: string; filename: string; href: string }[]
 }
 
 type Action = 'accept' | 'query' | 'reject'
@@ -135,6 +137,30 @@ export function ExpenditureReview({
               <span className="tabular-nums">{e.amount}</span>
             </span>
           </div>
+
+          {e.proofs.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-3">
+              {e.proofs.map((proof) => (
+                <a
+                  key={proof.id}
+                  href={proof.href}
+                  className="link-brand inline-flex items-center gap-1.5 text-xs"
+                >
+                  <Paperclip className="h-3 w-3" aria-hidden />
+                  {proof.filename}
+                </a>
+              ))}
+            </div>
+          ) : (
+            // Said plainly rather than left as an absence. Accepting an expense
+            // is what turns paid money into accounted-for money, and a reviewer
+            // doing that on a description alone should know that is what they
+            // are doing.
+            <p className="inline-flex items-center gap-1.5 text-xs text-warning">
+              <FileWarning className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              No receipt attached — accepting this takes the description on trust.
+            </p>
+          )}
 
           {e.reviewNote && (
             <p className="flex items-start gap-1.5 text-xs text-muted-foreground">

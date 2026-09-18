@@ -8,7 +8,8 @@ import { formatDate } from '@/lib/utils'
 import { tenantScope } from '@/lib/tenant-db'
 import { callerInnovatorId } from '@/lib/authz'
 import { fromCents, toCents, grantBalances } from '@/lib/funds/rules'
-import { canSubmitExpenditure } from '@/lib/funds/expenditure'
+import { canSubmitExpenditure, participantMayEdit } from '@/lib/funds/expenditure'
+import type { ExpenditureStatus } from '@/lib/funds/expenditure'
 import type { GrantStatus } from '@/lib/funds/rules'
 import { SubmitExpenditure } from '@/components/funds/SubmitExpenditure'
 import { ParticipantExpenditures } from '@/components/funds/ParticipantExpenditures'
@@ -43,7 +44,17 @@ export default async function MyGrantPage() {
     include: {
       fund: { select: { name: true } },
       tranches: { orderBy: { sequence: 'asc' } },
-      expenditures: { orderBy: { spentOn: 'desc' } },
+      expenditures: {
+        orderBy: { spentOn: 'desc' },
+        include: {
+          // Only what the link needs. The share token is the whole of the
+          // authorisation for the file, so nothing else about the proof travels.
+          proofs: {
+            where: { revokedAt: null },
+            select: { id: true, filename: true, shareToken: true },
+          },
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -200,6 +211,12 @@ export default async function MyGrantPage() {
                       amount: money(toCents(Number(e.amount))),
                       status: e.status,
                       reviewNote: e.reviewNote,
+                      proofs: e.proofs.map((proof) => ({
+                        id: proof.id,
+                        filename: proof.filename,
+                        href: `/proof/${proof.shareToken}`,
+                      })),
+                      mayAttach: participantMayEdit(e.status as ExpenditureStatus),
                     }))}
                   />
                 </div>
