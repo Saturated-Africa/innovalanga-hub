@@ -78,7 +78,31 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The gitleaks ACTION requires a paid licence for organisation accounts
+      # and fails without one. The gitleaks binary is MIT licensed, so it is
+      # fetched and run directly - same scanner, no licence server, and nothing
+      # about the check depends on a third-party action staying free.
       - name: Scan history for committed secrets
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=8.28.0
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"             | tar -xz -C /tmp gitleaks
+          /tmp/gitleaks detect --source . --redact --verbose --exit-code 1
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      # Its own package with its own lockfile. The root install does not provide
+      # aws-cdk-lib, which is why the root typecheck could not see it.
+      - run: npm ci
+        working-directory: infra
+
+      - name: Typecheck infrastructure
+        run: npx tsc --noEmit -p tsconfig.json
+        working-directory: infra

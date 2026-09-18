@@ -22,5 +22,12 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    // A separate package with its own dependencies and its own tsconfig. The
+    // root typecheck passed locally only because infra/node_modules happened to
+    // be installed; in CI it could not resolve aws-cdk-lib and failed on code
+    // that was perfectly fine. It is typechecked by its own job.
+    "infra"
+  ]
 }
