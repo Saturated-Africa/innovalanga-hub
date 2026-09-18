@@ -12,6 +12,7 @@ import { fundSummary } from '@/lib/funds/queries'
 import { canPayTranche, toCents, fromCents, grantBalances, type Tranche } from '@/lib/funds/rules'
 import { ArrowLeft } from 'lucide-react'
 import { TrancheSchedule } from '@/components/funds/TrancheSchedule'
+import { ExpenditureReview } from '@/components/funds/ExpenditureReview'
 
 /**
  * One grant: the award, its payment schedule, and what the participant has done
@@ -183,45 +184,26 @@ export default async function GrantPage(props: { params: Promise<{ id: string }>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {grant.expenditures.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nothing reported yet. Money paid out stays unaccounted for until the
-              participant submits what it was spent on.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {grant.expenditures.map((e) => (
-                <div
-                  key={e.id}
-                  className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-2 text-sm last:border-0"
-                >
-                  <span className="min-w-0">
-                    <span className="font-medium">{e.supplier}</span>
-                    <span className="text-muted-foreground"> · {e.description}</span>
-                  </span>
-                  <span className="flex items-center gap-4">
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(e.spentOn)}
-                    </span>
-                    <Badge
-                      variant={
-                        e.status === 'Accepted'
-                          ? 'default'
-                          : e.status === 'Rejected'
-                            ? 'destructive'
-                            : 'secondary'
-                      }
-                    >
-                      {e.status}
-                    </Badge>
-                    <span className="tabular-nums">
-                      {money(toCents(Number(e.amount)))}
-                    </span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <p className="mb-4 max-w-prose text-sm text-muted-foreground">
+            Accepting an expense is what turns money paid out into money accounted for.
+            Querying one sends it back to the participant with a note, which is the right
+            answer to a thin description or a missing receipt.
+          </p>
+          <ExpenditureReview
+            grantId={grant.id}
+            canReview={canAct}
+            rows={grant.expenditures.map((e) => ({
+              id: e.id,
+              spentOn: formatDate(e.spentOn),
+              supplier: e.supplier,
+              description: e.description,
+              amount: money(toCents(Number(e.amount))),
+              category: e.category,
+              status: e.status,
+              reviewedBy: e.reviewedBy,
+              reviewNote: e.reviewNote,
+            }))}
+          />
         </CardContent>
       </Card>
     </div>

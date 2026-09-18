@@ -81,6 +81,18 @@ test('a mentor keeps their own sections and is turned away elsewhere', () => {
   assert.equal(redirectFor('/dashboard/book', 'mentor'), '/dashboard/sessions')
 })
 
+test('a participant reaches their own grant, and staff pages stay closed', () => {
+  // Linked in the innovator's sidebar, so the middleware has to let them in -
+  // the same defect as the M&E menu item that was visible and bounced.
+  assert.equal(redirectFor('/dashboard/innovator/grant', 'innovator'), null)
+
+  // /dashboard/grants is the staff register of every award in the programme.
+  // Its name is one character away from the participant's own page, which is
+  // exactly the kind of near-miss the prefix bug was.
+  assert.notEqual(redirectFor('/dashboard/grants', 'innovator'), null)
+  assert.notEqual(redirectFor('/dashboard/funds', 'innovator'), null)
+})
+
 test('a funder reaches reports, M&E and the readiness trackers only', () => {
   assert.equal(redirectFor('/dashboard/reports', 'funder_viewer'), null)
   assert.equal(redirectFor('/dashboard/mande', 'funder_viewer'), null)
