@@ -14,16 +14,19 @@
 function pw(role: string, seeded: string): string {
   return process.env[`E2E_PASSWORD_${role}`] ?? seeded
 }
+function em(role: string, seeded: string): string {
+  return process.env[`E2E_EMAIL_${role}`] ?? seeded
+}
 export const ACCOUNTS = {
-  superAdmin: { email: 'admin@innovalanga.co.za', password: pw('SUPERADMIN', 'Admin@1234'), role: 'super_admin' },
+  superAdmin: { email: em('SUPERADMIN', 'admin@innovalanga.co.za'), password: pw('SUPERADMIN', 'Admin@1234'), role: 'super_admin' },
   facilitator: {
-    email: 'facilitator@innovalanga.co.za',
+    email: em('FACILITATOR', 'facilitator@innovalanga.co.za'),
     password: pw('FACILITATOR', 'Facilitator@1234'),
     role: 'facilitator',
   },
-  mentor: { email: 'mentor1@innovalanga.co.za', password: pw('MENTOR', 'Mentor@1234'), role: 'mentor' },
-  innovator: { email: 'zanele@innovalanga.co.za', password: pw('INNOVATOR', 'Innovator@1234'), role: 'innovator' },
-  funder: { email: 'funder@tia.gov.za', password: pw('FUNDER', 'Funder@1234'), role: 'funder_viewer' },
+  mentor: { email: em('MENTOR', 'mentor1@innovalanga.co.za'), password: pw('MENTOR', 'Mentor@1234'), role: 'mentor' },
+  innovator: { email: em('INNOVATOR', 'zanele@innovalanga.co.za'), password: pw('INNOVATOR', 'Innovator@1234'), role: 'innovator' },
+  funder: { email: em('FUNDER', 'funder@tia.gov.za'), password: pw('FUNDER', 'Funder@1234'), role: 'funder_viewer' },
 } as const
 
 export type AccountKey = keyof typeof ACCOUNTS
