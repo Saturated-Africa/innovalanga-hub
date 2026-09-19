@@ -8,6 +8,12 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getTRLLabel, getBRLLabel, getIRLLabel, getMRLLabel } from '@/lib/utils'
+import {
+  RUBRIC,
+  SCORING_RULES,
+  levelFor,
+  type RubricDimension,
+} from '@/lib/readiness-rubric'
 import { toast } from '@/hooks/use-toast'
 import { Loader2 } from 'lucide-react'
 
@@ -47,6 +53,39 @@ const SCORE_FILL: Record<string, string> = {
   BRL: 'bg-chart-2 text-white',
   IRL: 'bg-chart-3 text-white',
   MRL: 'bg-chart-4 text-white',
+}
+
+/**
+ * What the selected level requires, and what proves it.
+ *
+ * Shown beside the buttons rather than kept in a document, because a level name on
+ * its own is a judgement with no threshold: two facilitators could score the same
+ * venture differently and both be defensible. These scores drive the trajectory
+ * charts and the funder reports, so that variance propagates into everything built
+ * on them.
+ */
+function LevelGuidance({
+  dimension,
+  score,
+}: {
+  dimension: RubricDimension
+  score: number
+}) {
+  const level = levelFor(dimension, score)
+  if (!level) return null
+
+  return (
+    <div className="mt-2 rounded-md border border-border bg-muted/40 px-3 py-2.5 text-sm">
+      <p className="font-medium">
+        {RUBRIC[dimension].code} {level.level} — {level.name}
+      </p>
+      <p className="mt-1">{level.criteria}</p>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        <span className="font-medium">Evidence on file: </span>
+        {level.evidence}
+      </p>
+    </div>
+  )
 }
 
 function ScoreSelector({
@@ -241,6 +280,33 @@ export function AssessmentForm({
         </CardContent>
       </Card>
 
+      {/*
+        * The rules, before any score is chosen.
+        *
+        * Kept on the form rather than in a document, because a rubric nobody opens
+        * is a rubric that does not exist. The first two are what hold the scale
+        * together: without them "mostly at level 6" becomes a 6, and then a 6
+        * means nothing across a cohort.
+        */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">How to score</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
+            {SCORING_RULES.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
+          <p className="mt-3 max-w-prose text-xs text-muted-foreground">
+            TRL was written for hardware. For software, a relevant environment means real
+            users on real devices and real connectivity rather than a staging server; for
+            agri-processing it means a season. Use the intent of the level and write your
+            reading of it into the justification, so the next assessor sees it.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* TRL */}
       <Card>
         <CardHeader>
@@ -248,6 +314,7 @@ export function AssessmentForm({
         </CardHeader>
         <CardContent className="space-y-4">
           <ScoreSelector type="TRL" value={trl} onChange={setTRL} labelFn={getTRLLabel} />
+          <LevelGuidance dimension="trl" score={trl} />
           {prevScores && trl < prevScores.trl - 2 && (
             <p className="text-sm text-destructive font-medium">
               Score drops {prevScores.trl - trl} points from previous ({prevScores.trl}). Justification required below.
@@ -273,6 +340,7 @@ export function AssessmentForm({
         </CardHeader>
         <CardContent className="space-y-4">
           <ScoreSelector type="BRL" value={brl} onChange={setBRL} labelFn={getBRLLabel} />
+          <LevelGuidance dimension="brl" score={brl} />
           {prevScores && brl < prevScores.brl - 2 && (
             <p className="text-sm text-destructive font-medium">
               Score drops {prevScores.brl - brl} points from previous ({prevScores.brl}). Justification required below.
@@ -298,6 +366,7 @@ export function AssessmentForm({
         </CardHeader>
         <CardContent className="space-y-4">
           <ScoreSelector type="IRL" value={irl} onChange={setIRL} labelFn={getIRLLabel} />
+          <LevelGuidance dimension="irl" score={irl} />
           {prevScores && irl < prevScores.irl - 2 && (
             <p className="text-sm text-destructive font-medium">
               Score drops {prevScores.irl - irl} points from previous ({prevScores.irl}). Justification required below.
@@ -323,6 +392,7 @@ export function AssessmentForm({
         </CardHeader>
         <CardContent className="space-y-4">
           <ScoreSelector type="MRL" value={mrl} onChange={setMRL} labelFn={getMRLLabel} />
+          <LevelGuidance dimension="mrl" score={mrl} />
           {prevScores && prevScores.mrl != null && mrl < prevScores.mrl - 2 && (
             <p className="text-sm text-destructive font-medium">
               Score drops {prevScores.mrl - mrl} points from previous ({prevScores.mrl}). Justification required below.
