@@ -10,7 +10,7 @@
  *
  *   super_admin  awards a grant with a two-tranche schedule
  *   super_admin  approves the grant, then activates it - a Draft grant cannot pay
- *   super_admin  approves tranche 1, then records its payment
+ *   super_admin  approves tranche 1, records its payment, files proof of it
  *   innovator    reports an expense, with a receipt attached
  *   facilitator  queries the expense with a note
  *   innovator    answers the query
@@ -179,6 +179,24 @@ try {
     await page.reload({ waitUntil: 'domcontentloaded' })
     const paid = await page.locator('text=Paid').count()
     record('tranche 1 is paid', paid > 0)
+
+    // Before anything is attached, the page must say the money left with nothing
+    // evidencing it. That warning is the whole point of this feature.
+    const warned = await page.locator('text=No proof of payment on file').count()
+    record('a paid tranche with no proof says so', warned > 0)
+
+    await page.setInputFiles('input[type=file]', {
+      name: `payment-${STAMP}.pdf`,
+      mimeType: 'application/pdf',
+      buffer: TINY_PDF,
+    })
+    await page.waitForTimeout(4_000)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+
+    const proofLinked = await page.locator(`text=payment-${STAMP}.pdf`).count()
+    const stillWarned = await page.locator('text=No proof of payment on file').count()
+    record('proof of payment attaches and the warning clears',
+      proofLinked > 0 && stillWarned === 0)
     await page.close()
   }
 
