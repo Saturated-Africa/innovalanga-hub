@@ -9,3 +9,15 @@
 # reader what to supply; the real value is generated on the instance and lives
 # only in its .env, which is not tracked.
 80c251816196bdf9ebc8c071dcd43a13aa6e0b74:.env.example:generic-api-key:10
+
+# lib/upload-expense-proof.ts sends the storage key the presign step issued back
+# to the record step, which checks it is a key this server built. gitleaks reads
+# "s3Key:" followed by a high entropy value and cannot tell a path from a
+# credential. It is a path: "finance/grants/<id>/proof/<uuid>.pdf", and the
+# object it names is only reachable through a presigned URL or a share token.
+#
+# Fingerprinted rather than rule-suppressed, so a real key appearing in this same
+# file later is still reported. The line also carries a gitleaks:allow comment,
+# which covers future commits - this entry covers the commit already made, since
+# the scan reads history.
+f00f73b425963c730a649c8364f9506c301f463f:lib/upload-expense-proof.ts:generic-api-key:72

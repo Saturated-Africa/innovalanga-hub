@@ -11,7 +11,7 @@
  *   super_admin  awards a grant with a two-tranche schedule
  *   super_admin  approves the grant, then activates it - a Draft grant cannot pay
  *   super_admin  approves tranche 1, then records its payment
- *   innovator    reports an expense against it
+ *   innovator    reports an expense, with a receipt attached
  *   facilitator  queries the expense with a note
  *   innovator    answers the query
  *   facilitator  accepts it, and the unaccounted figure moves
@@ -19,6 +19,26 @@
  * Run: node scripts/grant-lifecycle-check.mjs
  */
 import { chromium } from '@playwright/test'
+
+/**
+ * The smallest thing that is really a PDF.
+ *
+ * A .pdf named text file would pass the extension check and fail the content
+ * type one, so the check would prove nothing about the allowlist. This is a
+ * valid single page document.
+ */
+const TINY_PDF = Buffer.from(
+  [
+    '%PDF-1.4',
+    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj',
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 99 9]>>endobj',
+    'trailer<</Root 1 0 R>>',
+    '%%EOF',
+    '',
+  ].join(String.fromCharCode(10)),
+  'latin1'
+)
 
 const BASE = process.env.E2E_BASE_URL ?? 'https://hub.innovalanga.co.za'
 const STAMP = Date.now().toString().slice(-6)
@@ -176,11 +196,23 @@ try {
     await page.fill('#exp-amount', '150')
     await page.fill('#exp-supplier', `Supplier ${STAMP}`)
     await page.fill('#exp-description', 'Materials bought for the build.')
+
+    // Attached at the moment of reporting, which is the path a participant
+    // actually takes. Anything else tests a screen nobody uses first.
+    await page.setInputFiles('#exp-proof', {
+      name: `receipt-${STAMP}.pdf`,
+      mimeType: 'application/pdf',
+      buffer: TINY_PDF,
+    })
+
     await page.click('button:has-text("Submit it")')
     await page.waitForTimeout(3_000)
     await page.reload({ waitUntil: 'domcontentloaded' })
     const submitted = await page.locator(`text=Supplier ${STAMP}`).count()
     record('participant reports an expense', submitted > 0)
+
+    const receipt = await page.locator(`text=receipt-${STAMP}.pdf`).count()
+    record('the receipt is attached and linked', receipt > 0)
     await page.close()
   }
 
@@ -196,6 +228,12 @@ try {
     await page.reload({ waitUntil: 'domcontentloaded' })
     const queried = await page.locator('text=Queried').count()
     record('facilitator queries the expense', queried > 0)
+
+    // The reviewer must see the evidence, and must not be told there is none.
+    const sawReceipt = await page.locator(`text=receipt-${STAMP}.pdf`).count()
+    const sawWarning = await page.locator('text=No receipt attached').count()
+    record('the reviewer sees the receipt, not the missing-receipt warning',
+      sawReceipt > 0 && sawWarning === 0)
     await page.close()
   }
 
