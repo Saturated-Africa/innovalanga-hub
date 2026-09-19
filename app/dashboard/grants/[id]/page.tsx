@@ -49,7 +49,17 @@ export default async function GrantPage(props: { params: Promise<{ id: string }>
     include: {
       fund: { select: { id: true, name: true, currency: true } },
       innovator: { select: { id: true, firstName: true, lastName: true } },
-      tranches: { orderBy: { sequence: 'asc' } },
+      tranches: {
+        orderBy: { sequence: 'asc' },
+        include: {
+          // Proof that the money left. Read for every viewer including a funder,
+          // because reconciling disbursements is what the link is for.
+          proofs: {
+            where: { revokedAt: null },
+            select: { id: true, filename: true, shareToken: true },
+          },
+        },
+      },
       expenditures: {
         orderBy: { spentOn: 'desc' },
         include: {
@@ -114,6 +124,11 @@ export default async function GrantPage(props: { params: Promise<{ id: string }>
       canPay: verdict.allowed,
       blockedBecause: verdict.reasons,
       warnings: verdict.warnings,
+      proofs: t.proofs.map((proof) => ({
+        id: proof.id,
+        filename: proof.filename,
+        href: `/proof/${proof.shareToken}`,
+      })),
     }
   })
 
