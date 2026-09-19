@@ -41,6 +41,19 @@ export function CaptureClient({ cohorts }: { cohorts: { id: string; name: string
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [recordId, setRecordId] = useState<string | null>(null)
+  /**
+   * What accepting produced: the participant, and the one-time password when an
+   * account had to be created.
+   *
+   * The password is shown once and is unrecoverable - only its bcrypt hash is
+   * stored - so if this screen does not put it in front of the facilitator, the
+   * participant cannot sign in and somebody has to reset it.
+   */
+  const [linked, setLinked] = useState<{
+    participant: { id: string; name: string } | null
+    temporaryPassword: string | null
+    email: string | null
+  } | null>(null)
 
   const [values, setValues] = useState<BeneficiaryValues>(EMPTY_BENEFICIARY)
   const [cohortId, setCohortId] = useState(cohorts[0]?.id ?? '')
@@ -119,10 +132,15 @@ export function CaptureClient({ cohorts }: { cohorts: { id: string; name: string
     setError('')
     setBusy(true)
     try {
-      await post(`/api/beneficiaries/${recordId}/accept`, {
+      const result = await post(`/api/beneficiaries/${recordId}/accept`, {
         acceptedByName: acceptName,
         signatureImage: acceptSignature,
         confirmed: true,
+      })
+      setLinked({
+        participant: result?.participant ?? null,
+        temporaryPassword: result?.temporaryPassword ?? null,
+        email: result?.email ?? null,
       })
       setStep('done')
       router.refresh()
@@ -150,8 +168,46 @@ export function CaptureClient({ cohorts }: { cohorts: { id: string; name: string
               </p>
             </div>
           </div>
+          {linked?.participant && (
+            <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
+              <p className="text-sm font-medium">
+                {linked.participant.name} is now a participant
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                They can be assessed, book mentorship, appear in cohort reports and be
+                awarded a grant. Before this step an accepted form was not attached to any
+                of that.
+              </p>
+
+              {linked.temporaryPassword && (
+                <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
+                  <p className="text-sm font-medium">Hand these over now</p>
+                  <p className="mt-1 text-sm">
+                    Sign in with{' '}
+                    <span className="font-mono">{linked.email}</span> and this one-time
+                    password:
+                  </p>
+                  <p className="mt-1 select-all font-mono text-base">
+                    {linked.temporaryPassword}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Shown once and not recoverable - only a hash of it is stored. They can
+                    change it from their own account page.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
-            <Button asChild>
+            {linked?.participant && (
+              <Button asChild>
+                <Link href={`/dashboard/innovators/${linked.participant.id}`}>
+                  Open participant profile
+                </Link>
+              </Button>
+            )}
+            <Button variant="outline" asChild>
               <Link href={`/dashboard/beneficiaries/${recordId}`}>View signed form</Link>
             </Button>
             <Button variant="outline" asChild>

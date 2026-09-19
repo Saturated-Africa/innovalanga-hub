@@ -1,0 +1,161 @@
+/**
+ * Does accepting a beneficiary form actually produce a participant?
+ *
+ * Before this was built, onboarding produced signed, accepted records that no
+ * assessment, booking, stipend or grant could attach to, because none of those
+ * hang off a beneficiary record - they hang off an InnovatorProfile. The form
+ * model always said `innovatorId` is "set when the record is accepted". Nothing
+ * set it.
+ *
+ * Driven through the API with a signed-in browser session rather than by clicking
+ * the capture wizard, because two of its three steps are signature pads and
+ * drawing on a canvas proves nothing about the linking this exists to check. The
+ * assertions at the end are on rendered pages, not on the API's own answer.
+ *
+ * Run: node scripts/beneficiary-onboarding-check.mjs
+ */
+import { chromium } from '@playwright/test'
+
+const BASE = process.env.E2E_BASE_URL ?? 'https://hub.innovalanga.co.za'
+const STAFF = {
+  email: process.env.E2E_EMAIL_FACILITATOR ?? 'facilitator@innovalanga.co.za',
+  password: process.env.E2E_PASSWORD_FACILITATOR ?? 'Facilitator@1234',
+}
+
+const STAMP = Date.now().toString().slice(-6)
+const NAME = `Thandiwe Onboarding${STAMP} Nkosi`
+const EMAIL = `onboarding-${STAMP}@innovalanga.test`
+
+/**
+ * A 1x1 PNG as a data URL - the smallest thing the signature schema accepts.
+ *
+ * The schema requires a PNG data URL and bounds its decoded size; it does not
+ * care what the picture is. A drawn squiggle would test the canvas, not the
+ * linking.
+ */
+const SIGNATURE =
+  'data:image/png;base64,' +
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP6zwAAAgUBAV' +
+  'nqEpsAAAAASUVORK5CYII='
+
+const results = []
+function record(step, ok, detail = '') {
+  results.push({ step, ok })
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${step}${detail ? ` — ${detail}` : ''}`)
+}
+
+const browser = await chromium.launch()
+const page = await browser.newPage()
+
+try {
+  await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
+  await page.fill('#email', STAFF.email)
+  await page.fill('#password', STAFF.password)
+  await page.click('button[type=submit]')
+  await page.waitForURL((u) => !u.pathname.includes('/login'), { timeout: 45_000 })
+  record('facilitator signs in', !page.url().includes('/login'))
+
+  // A cohort is required to accept, deliberately: a participant without one
+  // cannot be assessed and appears in no cohort report.
+  //
+  // Taken from the cohorts page, because there is no cohorts API - the pages that
+  // need them read them server-side. Scraping one link is less machinery than
+  // adding a route this check would be the only caller of.
+  await page.goto(`${BASE}/dashboard/cohorts`, { waitUntil: 'domcontentloaded' })
+  const cohortHref = await page
+    .locator('a[href^="/dashboard/cohorts/"]')
+    .first()
+    .getAttribute('href')
+    .catch(() => null)
+  const cohortId = cohortHref ? cohortHref.split('/').pop() : null
+  record('a cohort is available to assign', Boolean(cohortId), cohortId ?? 'none')
+  if (!cohortId) throw new Error('no cohort to assign; cannot accept a form')
+
+  const created = await page.request.post(`${BASE}/api/beneficiaries`, {
+    failOnStatusCode: false,
+    data: {
+      fullName: NAME,
+      email: EMAIL,
+      cohortId,
+      cellphone: '0821234567',
+      projectTitle: `Onboarding Check ${STAMP}`,
+      sector: 'Agriculture',
+      conceptDescription: 'A record created by the onboarding check.',
+    },
+  })
+  const createdBody = await created.json().catch(() => ({}))
+  record('a beneficiary record is created', created.ok(), `${created.status()}`)
+  if (!created.ok()) throw new Error(JSON.stringify(createdBody).slice(0, 300))
+  const recordId = createdBody.id
+
+  const signed = await page.request.post(`${BASE}/api/beneficiaries/${recordId}/sign`, {
+    failOnStatusCode: false,
+    data: { signedName: NAME, signatureImage: SIGNATURE, confirmed: true },
+  })
+  record('the beneficiary signs', signed.ok(), `${signed.status()}`)
+  if (!signed.ok()) throw new Error((await signed.text()).slice(0, 300))
+
+  const accepted = await page.request.post(
+    `${BASE}/api/beneficiaries/${recordId}/accept`,
+    {
+      failOnStatusCode: false,
+      data: {
+        acceptedByName: 'Onboarding Check',
+        signatureImage: SIGNATURE,
+        confirmed: true,
+      },
+    }
+  )
+  const acceptedBody = await accepted.json().catch(() => ({}))
+  record('the centre accepts it', accepted.ok(), `${accepted.status()}`)
+  if (!accepted.ok()) throw new Error(JSON.stringify(acceptedBody).slice(0, 300))
+
+  record(
+    'acceptance returns a participant',
+    Boolean(acceptedBody.participant?.id),
+    acceptedBody.participant?.id ?? 'none'
+  )
+  record(
+    'a one-time password is returned for the new account',
+    typeof acceptedBody.temporaryPassword === 'string' &&
+      acceptedBody.temporaryPassword.length >= 16
+  )
+
+  // The assertions that matter: the participant is real on the pages that use
+  // participants, not merely present in the response body.
+  await page.goto(`${BASE}/dashboard/innovators`, { waitUntil: 'domcontentloaded' })
+  const inRegister = await page.locator(`text=Onboarding${STAMP}`).count()
+  record('the participant appears in the innovators register', inRegister > 0)
+
+  const profileId = acceptedBody.participant?.id
+  if (profileId) {
+    await page.goto(`${BASE}/dashboard/innovators/${profileId}`, {
+      waitUntil: 'domcontentloaded',
+    })
+    const body = await page.locator('body').innerText()
+    record('their profile page renders', /Onboarding/i.test(body))
+    record(
+      'the project came across as the business',
+      body.includes(`Onboarding Check ${STAMP}`)
+    )
+  }
+
+  // Accepting twice must not make a second participant.
+  const again = await page.request.post(`${BASE}/api/beneficiaries/${recordId}/accept`, {
+    failOnStatusCode: false,
+    data: {
+      acceptedByName: 'Onboarding Check',
+      signatureImage: SIGNATURE,
+      confirmed: true,
+    },
+  })
+  record('accepting twice is refused', !again.ok(), `${again.status()}`)
+} catch (err) {
+  record('onboarding run', false, err.message)
+} finally {
+  await browser.close()
+}
+
+const failed = results.filter((r) => !r.ok)
+console.log(`\n${results.length - failed.length}/${results.length} checks passed`)
+process.exit(failed.length === 0 ? 0 : 1)
