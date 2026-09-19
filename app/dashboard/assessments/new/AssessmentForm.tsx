@@ -14,6 +14,7 @@ import {
   levelFor,
   type RubricDimension,
 } from '@/lib/readiness-rubric'
+import { unevidencedRises, describeGap } from '@/lib/assessment-evidence'
 import { toast } from '@/hooks/use-toast'
 import { Loader2 } from 'lucide-react'
 
@@ -64,6 +65,71 @@ const SCORE_FILL: Record<string, string> = {
  * charts and the funder reports, so that variance propagates into everything built
  * on them.
  */
+interface VaultDocument {
+  id: string
+  name: string
+  type: string
+}
+
+/**
+ * Which of the participant's documents show this score.
+ *
+ * The rubric says evidence on file, and before this the vault and the assessment
+ * were unconnected - so that was an honour system. A funder could not check a
+ * cohort's numbers without asking somebody to go and look through folders.
+ *
+ * Only documents already in the participant's vault are offered. Uploading belongs
+ * on their profile, where it is one job; mixing it into scoring would make the
+ * assessment the place files get dumped.
+ */
+function EvidencePicker({
+  dimension,
+  documents,
+  selected,
+  onToggle,
+  loading,
+}: {
+  dimension: RubricDimension
+  documents: VaultDocument[]
+  selected: string[]
+  onToggle: (documentId: string) => void
+  loading: boolean
+}) {
+  if (loading) {
+    return <p className="mt-2 text-xs text-muted-foreground">Loading documents…</p>
+  }
+  if (documents.length === 0) {
+    return (
+      <p className="mt-2 text-xs text-muted-foreground">
+        This participant has no documents on file yet. Upload them on their profile, then
+        they can be attached here.
+      </p>
+    )
+  }
+
+  return (
+    <div className="mt-2">
+      <p className="text-xs font-medium text-muted-foreground">
+        Evidence for {RUBRIC[dimension].code}
+      </p>
+      <div className="mt-1 space-y-1">
+        {documents.map((doc) => (
+          <label key={doc.id} className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={selected.includes(doc.id)}
+              onChange={() => onToggle(doc.id)}
+              className="h-3.5 w-3.5"
+            />
+            <span className="truncate">{doc.name}</span>
+            <span className="text-xs text-muted-foreground">{doc.type}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function LevelGuidance({
   dimension,
   score,
@@ -144,6 +210,60 @@ export function AssessmentForm({
   const [irlJustification, setIRLJustification] = useState('')
   const [mrlJustification, setMRLJustification] = useState('')
   const [dropJustification, setDropJustification] = useState('')
+
+  /**
+   * The participant's documents, and which ones evidence which score.
+   *
+   * Fetched when a participant is chosen rather than passed in for everybody: a
+   * cohort's worth of document lists is a lot of data to render a picker that only
+   * ever shows one person's.
+   */
+  const [documents, setDocuments] = useState<VaultDocument[]>([])
+  const [loadingDocs, setLoadingDocs] = useState(false)
+  const [evidence, setEvidence] = useState<Record<RubricDimension, string[]>>({
+    trl: [], brl: [], mrl: [], irl: [],
+  })
+
+  function toggleEvidence(dimension: RubricDimension, documentId: string) {
+    setEvidence((prev) => {
+      const current = prev[dimension]
+      return {
+        ...prev,
+        [dimension]: current.includes(documentId)
+          ? current.filter((id) => id !== documentId)
+          : [...current, documentId],
+      }
+    })
+  }
+
+  useEffect(() => {
+    if (!innovatorId) {
+      setDocuments([])
+      setEvidence({ trl: [], brl: [], mrl: [], irl: [] })
+      return
+    }
+    let cancelled = false
+    setLoadingDocs(true)
+    fetch(`/api/documents?innovatorId=${encodeURIComponent(innovatorId)}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list) => {
+        if (cancelled) return
+        setDocuments(Array.isArray(list) ? list : [])
+        // Selections belong to the participant they were made for. Carrying them to
+        // the next participant would attach one person's documents to another's
+        // score.
+        setEvidence({ trl: [], brl: [], mrl: [], irl: [] })
+      })
+      .catch(() => {
+        if (!cancelled) setDocuments([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDocs(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [innovatorId])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [prevScores, setPrevScores] = useState<{
@@ -180,6 +300,30 @@ export function AssessmentForm({
   const takenPeriods = existingAssessments
     .filter((a) => a.innovatorId === innovatorId)
     .map((a) => a.period)
+
+  /**
+   * Rises with nothing attached.
+   *
+   * The platform already demands a written reason when a score drops more than two
+   * points. A rise was unguarded, and a rise is the direction a funder is being
+   * asked to pay for - so the rule is made symmetric here.
+   *
+   * Shown rather than enforced. Some evidence is genuinely elsewhere on the day, and
+   * a mandatory field would be satisfied by attaching whatever is nearest, which is
+   * worse than a gap a funder can count.
+   */
+  const evidenceGaps = unevidencedRises(
+    prevScores
+      ? { trl: prevScores.trl, brl: prevScores.brl, mrl: prevScores.mrl, irl: prevScores.irl }
+      : null,
+    { trl, brl, mrl, irl },
+    {
+      trl: evidence.trl.length,
+      brl: evidence.brl.length,
+      mrl: evidence.mrl.length,
+      irl: evidence.irl.length,
+    }
+  )
 
   const needsDropJustification =
     prevScores !== null &&
@@ -222,6 +366,9 @@ export function AssessmentForm({
         brlJustification,
         irlJustification,
         mrlJustification,
+        evidence: (['trl', 'brl', 'mrl', 'irl'] as const).flatMap((dimension) =>
+          evidence[dimension].map((documentId) => ({ dimension, documentId }))
+        ),
         dropJustification: needsDropJustification ? dropJustification : undefined,
         // Not sent. The server records the signed-in user as the assessor, so
         // the name on a locked score is the person who submitted it.
@@ -307,6 +454,28 @@ export function AssessmentForm({
         </CardContent>
       </Card>
 
+      {evidenceGaps.length > 0 && (
+        <Card className="border-warning/50">
+          <CardHeader>
+            <CardTitle className="text-base">Scores that rose with no evidence attached</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-disc space-y-1 pl-5 text-sm">
+              {evidenceGaps.map((gap) => (
+                <li key={gap.dimension}>
+                  {describeGap(gap, RUBRIC[gap.dimension].code)}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 max-w-prose text-xs text-muted-foreground">
+              This does not stop you submitting. It is recorded as it stands, so a funder
+              reading this cohort can see which improvements are backed by a document and
+              which rest on the assessor&rsquo;s word.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* TRL */}
       <Card>
         <CardHeader>
@@ -315,6 +484,13 @@ export function AssessmentForm({
         <CardContent className="space-y-4">
           <ScoreSelector type="TRL" value={trl} onChange={setTRL} labelFn={getTRLLabel} />
           <LevelGuidance dimension="trl" score={trl} />
+          <EvidencePicker
+            dimension="trl"
+            documents={documents}
+            selected={evidence.trl}
+            onToggle={(id) => toggleEvidence("trl", id)}
+            loading={loadingDocs}
+          />
           {prevScores && trl < prevScores.trl - 2 && (
             <p className="text-sm text-destructive font-medium">
               Score drops {prevScores.trl - trl} points from previous ({prevScores.trl}). Justification required below.
@@ -341,6 +517,13 @@ export function AssessmentForm({
         <CardContent className="space-y-4">
           <ScoreSelector type="BRL" value={brl} onChange={setBRL} labelFn={getBRLLabel} />
           <LevelGuidance dimension="brl" score={brl} />
+          <EvidencePicker
+            dimension="brl"
+            documents={documents}
+            selected={evidence.brl}
+            onToggle={(id) => toggleEvidence("brl", id)}
+            loading={loadingDocs}
+          />
           {prevScores && brl < prevScores.brl - 2 && (
             <p className="text-sm text-destructive font-medium">
               Score drops {prevScores.brl - brl} points from previous ({prevScores.brl}). Justification required below.
@@ -367,6 +550,13 @@ export function AssessmentForm({
         <CardContent className="space-y-4">
           <ScoreSelector type="IRL" value={irl} onChange={setIRL} labelFn={getIRLLabel} />
           <LevelGuidance dimension="irl" score={irl} />
+          <EvidencePicker
+            dimension="irl"
+            documents={documents}
+            selected={evidence.irl}
+            onToggle={(id) => toggleEvidence("irl", id)}
+            loading={loadingDocs}
+          />
           {prevScores && irl < prevScores.irl - 2 && (
             <p className="text-sm text-destructive font-medium">
               Score drops {prevScores.irl - irl} points from previous ({prevScores.irl}). Justification required below.
@@ -393,6 +583,13 @@ export function AssessmentForm({
         <CardContent className="space-y-4">
           <ScoreSelector type="MRL" value={mrl} onChange={setMRL} labelFn={getMRLLabel} />
           <LevelGuidance dimension="mrl" score={mrl} />
+          <EvidencePicker
+            dimension="mrl"
+            documents={documents}
+            selected={evidence.mrl}
+            onToggle={(id) => toggleEvidence("mrl", id)}
+            loading={loadingDocs}
+          />
           {prevScores && prevScores.mrl != null && mrl < prevScores.mrl - 2 && (
             <p className="text-sm text-destructive font-medium">
               Score drops {prevScores.mrl - mrl} points from previous ({prevScores.mrl}). Justification required below.
