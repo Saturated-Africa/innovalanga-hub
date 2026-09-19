@@ -41,6 +41,9 @@ export default async function BeneficiaryPage(props: { params: Promise<{ id: str
   const values: BeneficiaryValues = {
     fullName: r.fullName,
     idNumber: '',
+    entityType: r.entityType ?? '',
+    entityRegistrationNumber: r.entityRegistrationNumber ?? '',
+    entityName: r.entityName ?? '',
     // The stored date, unlike the ID number, which is never sent back.
     dateOfBirth: r.dateOfBirth
       ? r.dateOfBirth.toISOString().slice(0, 10)

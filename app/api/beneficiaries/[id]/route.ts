@@ -5,6 +5,7 @@ import { encrypt, maskIdNumber } from '@/lib/encryption'
 import { validateSAIdNumber } from '@/lib/utils'
 import { resolveProgrammeId } from '@/lib/scope'
 import { beneficiaryDraftSchema, resolveDateOfBirth } from '@/lib/beneficiary-form'
+import { checkRegistration, type EntityKind } from '@/lib/company-registration'
 import {
   canRead,
   canEdit,
@@ -98,7 +99,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
   }
 
   const programmeId = record.programmeId
-  const { cohortId, idNumber, ...rest } = parsed.data
+  const { cohortId, idNumber, entityRegistrationNumber, entityType, ...rest } = parsed.data
 
   if (cohortId) {
     const cohort = await prisma.cohort.findFirst({
@@ -127,6 +128,24 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
   }
 
   const data: Record<string, unknown> = { ...fields }
+
+  // Same rule as on capture. Resolved against whichever of the two this request
+  // supplies, falling back to what is already on the record, so editing one
+  // without the other still gets checked against it.
+  if (entityType !== undefined) data.entityType = entityType ?? null
+  if (entityRegistrationNumber !== undefined) {
+    if (entityRegistrationNumber.trim() === '') {
+      data.entityRegistrationNumber = null
+    } else {
+      const declared = (entityType ?? record.entityType ?? 'Other') as EntityKind
+      const verdict = checkRegistration(entityRegistrationNumber, declared)
+      if (!verdict.ok) {
+        return NextResponse.json({ error: verdict.error }, { status: 400 })
+      }
+      data.entityRegistrationNumber = verdict.normalised
+    }
+  }
+
   if (cohortId !== undefined) data.cohortId = cohortId ?? null
 
   if (typedDob !== undefined || idNumber !== undefined) {

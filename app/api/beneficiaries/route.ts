@@ -4,6 +4,7 @@ import { encrypt } from '@/lib/encryption'
 import { validateSAIdNumber } from '@/lib/utils'
 import { tenantScope } from '@/lib/tenant-db'
 import { beneficiaryDraftSchema, resolveDateOfBirth } from '@/lib/beneficiary-form'
+import { checkRegistration, type EntityKind } from '@/lib/company-registration'
 import { isStaff } from '@/lib/beneficiary-access'
 
 /**
@@ -77,7 +78,31 @@ export async function POST(req: Request) {
   // cannot see another programme even if a query forgets to say so.
   const { programmeId, db: prisma } = scope
 
-  const { cohortId, idNumber, ...rest } = parsed.data
+  const { cohortId, idNumber, entityRegistrationNumber, entityType, ...rest } = parsed.data
+  /*
+   * The registration number is checked against the entity type.
+   *
+   * The last two digits of a CIPC number say what kind of entity it is, so a
+   * number ending /07 against an entity type of NPC means one of the two was
+   * mistyped. Refused rather than corrected: the type decides how the
+   * organisation appears in a funder's report, and the number is what a funder
+   * uses to look it up.
+   *
+   * Stored normalised, so two records for the same entity match - a certificate
+   * written CK1998/012345/23 and one written 1998/012345/23 are the same company.
+   */
+  let registrationNumber: string | null = null
+  if (entityRegistrationNumber && entityRegistrationNumber.trim() !== '') {
+    const verdict = checkRegistration(
+      entityRegistrationNumber,
+      (entityType ?? 'Other') as EntityKind
+    )
+    if (!verdict.ok) {
+      return NextResponse.json({ error: verdict.error }, { status: 400 })
+    }
+    registrationNumber = verdict.normalised ?? null
+  }
+
 
   // A client-supplied cohort is checked against the caller's programme.
   if (cohortId) {
@@ -125,6 +150,8 @@ export async function POST(req: Request) {
     const record = await prisma.beneficiaryRecord.create({
       data: {
         ...recordFields,
+        entityType: entityType ?? null,
+        entityRegistrationNumber: registrationNumber,
         programmeId,
         cohortId: cohortId ?? null,
         idNumberEncrypted,

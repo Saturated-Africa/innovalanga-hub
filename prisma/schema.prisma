@@ -40,6 +40,11 @@ enum StipendStatus {
 
 enum DocumentType {
   id_document
+  /// CIPC registration certificate, for a company registered under the
+  /// Companies Act 71 of 2008 - private companies and non-profit companies
+  /// chiefly, and close corporations and co-operatives registered under the
+  /// legislation it replaced.
+  cipc_registration
   proof_of_address
   business_plan
   pitch_deck
@@ -484,15 +489,32 @@ model StipendRecord {
 // ─── Documents ────────────────────────────────────────────────────────────────
 
 model Document {
-  id          String       @id @default(cuid())
-  innovatorId String
-  type        DocumentType
-  name        String
-  s3Key       String
-  sizeBytes   Int
-  uploadedAt  DateTime     @default(now())
+  id String @id @default(cuid())
 
-  innovator InnovatorProfile @relation(fields: [innovatorId], references: [id])
+  /// The participant this belongs to, once there is one.
+  ///
+  /// Optional because a document can be collected before the person is a
+  /// participant: an ID copy and a CIPC certificate are handed over at
+  /// onboarding, while the form is still being captured. Acceptance fills this
+  /// in, so the document then appears in the participant's vault without being
+  /// uploaded twice.
+  innovatorId String?
+  /// The beneficiary form it was collected against, when it was collected there.
+  beneficiaryRecordId String?
+
+  type       DocumentType
+  name       String
+  s3Key      String
+  sizeBytes  Int
+  uploadedAt DateTime     @default(now())
+
+  uploadedByUserId String?
+
+  innovator         InnovatorProfile?  @relation(fields: [innovatorId], references: [id])
+  beneficiaryRecord BeneficiaryRecord? @relation(fields: [beneficiaryRecordId], references: [id], onDelete: Cascade)
+
+  @@index([innovatorId, type])
+  @@index([beneficiaryRecordId])
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
@@ -734,6 +756,18 @@ model BeneficiaryRecord {
   email                String
   province             String?
 
+  // ── The entity, where there is one ──────────────────────────────────────
+  //
+  // Captured here rather than only on a Grant, which is where registration
+  // details used to live. A facilitator awarding a grant was retyping a
+  // registration number off a certificate they had already seen at onboarding,
+  // which is one transcription too many for a number that ends up on a grant
+  // agreement and a funder's report.
+  entityType               EntityType?
+  /// Normalised as YYYY/NNNNNN/SS. The suffix says what kind of entity it is, so
+  /// it is checked against entityType rather than stored as an opaque string.
+  entityRegistrationNumber String?
+  entityName               String?
   // ── Project details ─────────────────────────────────────────────────────
   hasInnovativeIdea  Boolean?
   conceptDescription String?  @db.Text
@@ -791,6 +825,7 @@ model BeneficiaryRecord {
   cohort    Cohort?           @relation(fields: [cohortId], references: [id])
   innovator InnovatorProfile? @relation(fields: [innovatorId], references: [id])
   user      User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  documents Document[]
 
   @@unique([programmeId, userId])
   @@index([programmeId, status])

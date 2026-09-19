@@ -4,6 +4,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { GENDERS, RACES, TITLES, PROVINCES, deriveFromIdNumber } from '@/lib/beneficiary-form'
+import { isRegisteredType } from '@/lib/company-registration'
+import {
+  BeneficiaryDocumentUpload,
+  type AttachedDocument,
+} from '@/components/beneficiary/BeneficiaryDocumentUpload'
 
 /**
  * The Beneficiary Capturing Form, laid out as the funder issues it.
@@ -37,6 +42,9 @@ export interface BeneficiaryValues {
   province: string
   hasInnovativeIdea: string // 'yes' | 'no' | ''
   conceptDescription: string
+  entityType: string
+  entityRegistrationNumber: string
+  entityName: string
   projectTitle: string
   developmentStage: string
   sector: string
@@ -63,6 +71,9 @@ export const EMPTY_BENEFICIARY: BeneficiaryValues = {
   province: '',
   hasInnovativeIdea: '',
   conceptDescription: '',
+  entityType: '',
+  entityRegistrationNumber: '',
+  entityName: '',
   projectTitle: '',
   developmentStage: '',
   sector: '',
@@ -136,12 +147,22 @@ export function BeneficiaryFormFields({
   onChange,
   readOnly = false,
   idNumberMasked,
+  onUploadDocument,
+  documents,
 }: {
   values: BeneficiaryValues
   onChange: (patch: Partial<BeneficiaryValues>) => void
   readOnly?: boolean
   /** Shown instead of the input once a form is signed. */
   idNumberMasked?: string | null
+  /**
+   * Attach a document to the record. Absent until the record exists, because a
+   * form can be rendered before it has been saved once and there is nothing to
+   * attach to yet - the field then says so rather than offering a control that
+   * cannot work.
+   */
+  onUploadDocument?: (type: string, file: File) => Promise<void>
+  documents?: AttachedDocument[]
 }) {
   const set =
     (field: keyof BeneficiaryValues) =>
@@ -356,6 +377,82 @@ export function BeneficiaryFormFields({
       </div>
 
       {/* ── PROJECT DETAILS ────────────────────────────────────────────── */}
+      {/*
+        * The entity, where there is one.
+        *
+        * Separate from Project Details because a project and a registered company
+        * are different things: somebody can have an idea with no company, and a
+        * company that predates the idea. The certificate upload appears only for
+        * the types that actually have one - asking a sole proprietor for a CIPC
+        * certificate is asking for a document that does not exist.
+        */}
+      <Section>Registered Entity</Section>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2">
+        <Cell label="Entity type" htmlFor="entityType">
+          <select
+            id="entityType"
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={values.entityType}
+            onChange={set('entityType')}
+            disabled={readOnly}
+          >
+            <option value="">Not registered</option>
+            <option value="PtyLtd">Private company ((Pty) Ltd)</option>
+            <option value="NPC">Non-profit company (NPC)</option>
+            <option value="CloseCorporation">Close corporation</option>
+            <option value="Cooperative">Co-operative</option>
+            <option value="SoleProprietor">Sole proprietor</option>
+            <option value="Trust">Trust</option>
+            <option value="Other">Other</option>
+          </select>
+        </Cell>
+        <Cell label="Registered name" htmlFor="entityName">
+          <Input
+            id="entityName"
+            value={values.entityName}
+            onChange={set('entityName')}
+            disabled={readOnly}
+            placeholder="As it appears on the certificate"
+          />
+        </Cell>
+      </div>
+
+      {isRegisteredType((values.entityType || 'Other') as never) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2">
+          <Cell label="Registration number" htmlFor="entityRegistrationNumber">
+            <Input
+              id="entityRegistrationNumber"
+              value={values.entityRegistrationNumber}
+              onChange={set('entityRegistrationNumber')}
+              disabled={readOnly}
+              placeholder="2016/123456/07"
+            />
+            {!readOnly && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                From the CIPC certificate. The last two digits say what kind of entity it
+                is, so they are checked against the type above.
+              </p>
+            )}
+          </Cell>
+          <Cell label="CIPC certificate">
+            {onUploadDocument ? (
+              <BeneficiaryDocumentUpload
+                label="Upload the certificate"
+                type="cipc_registration"
+                onUpload={onUploadDocument}
+                disabled={readOnly}
+                uploaded={documents?.filter((d) => d.type === 'cipc_registration') ?? []}
+              />
+            ) : (
+              <p className="py-2 text-sm text-muted-foreground">
+                Save the form first, then the certificate can be attached.
+              </p>
+            )}
+          </Cell>
+        </div>
+      )}
+
       <Section>Project Details</Section>
 
       <Cell label="Do you have an innovative idea?">

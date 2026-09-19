@@ -144,3 +144,23 @@ export function buildTrancheProofKey(
 ): string {
   return `finance/tranches/${trancheId}/proof/${uuid}.${extensionFor(contentType)}`
 }
+
+/**
+ * Storage key for a document collected against a beneficiary form.
+ *
+ * Under `beneficiaries/` rather than `innovators/`, because at the moment of
+ * upload there is no participant: an ID copy and a CIPC certificate are handed
+ * over while the form is being captured, and acceptance may never come. Keying by
+ * the record means a withdrawn form's documents are identifiable and removable
+ * without hunting for them.
+ *
+ * The object is not moved when the person becomes a participant. Copying files to
+ * make a path prettier is how you end up with two objects and one row.
+ */
+export function buildBeneficiaryDocumentKey(
+  beneficiaryRecordId: string,
+  uuid: string,
+  contentType: string
+): string {
+  return `beneficiaries/${beneficiaryRecordId}/documents/${uuid}.${extensionFor(contentType)}`
+}

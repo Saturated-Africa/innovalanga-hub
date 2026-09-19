@@ -117,6 +117,11 @@ try {
       localMunicipality: 'Greater Giyani',
       districtMunicipality: 'Mopani',
       cellphone: '0821234567',
+      entityType: 'PtyLtd',
+      entityName: `Onboarding Check Enterprises ${STAMP}`,
+      // Ends /07, which is what a private company's number ends in. The server
+      // checks the suffix against the type, so this pair has to agree.
+      entityRegistrationNumber: '2016/123456/07',
       hasInnovativeIdea: true,
       projectTitle: `Onboarding Check ${STAMP}`,
       sector: 'Agriculture',
@@ -128,6 +133,61 @@ try {
   record('a beneficiary record is created', created.ok(), `${created.status()}`)
   if (!created.ok()) throw new Error(JSON.stringify(createdBody).slice(0, 300))
   const recordId = createdBody.id
+
+  // A number whose suffix contradicts the entity type must be refused. /08 is a
+  // non-profit company, so it cannot belong to a (Pty) Ltd.
+  const mismatched = await page.request.patch(`${BASE}/api/beneficiaries/${recordId}`, {
+    failOnStatusCode: false,
+    data: { entityType: 'PtyLtd', entityRegistrationNumber: '2016/123456/08' },
+  })
+  const mismatchBody = await mismatched.text()
+  record(
+    'a registration number that contradicts the entity type is refused',
+    !mismatched.ok() && /non-profit|one of the two/i.test(mismatchBody),
+    `${mismatched.status()}`
+  )
+
+  // The CIPC certificate: presign, PUT to storage, then record it.
+  const presigned = await page.request.post(
+    `${BASE}/api/beneficiaries/${recordId}/documents`,
+    {
+      failOnStatusCode: false,
+      data: {
+        filename: `cipc-${STAMP}.pdf`,
+        contentType: 'application/pdf',
+        sizeBytes: TINY_PDF.length,
+        type: 'cipc_registration',
+      },
+    }
+  )
+  const presignedBody = await presigned.json().catch(() => ({}))
+  record('a certificate upload can be started', presigned.ok(), `${presigned.status()}`)
+
+  if (presigned.ok()) {
+    const put = await page.request.put(presignedBody.url, {
+      failOnStatusCode: false,
+      headers: { 'Content-Type': 'application/pdf' },
+      data: TINY_PDF,
+    })
+    // This is the step that fails when the storage prefix is not granted to the
+    // instance, which is a configuration problem rather than a code one.
+    record('storage accepts the certificate', put.ok(), `${put.status()}`)
+
+    const recorded = await page.request.put(
+      `${BASE}/api/beneficiaries/${recordId}/documents`,
+      {
+        failOnStatusCode: false,
+        data: {
+          filename: `cipc-${STAMP}.pdf`,
+          contentType: 'application/pdf',
+          sizeBytes: TINY_PDF.length,
+          type: 'cipc_registration',
+          s3Key: presignedBody.s3Key,
+        },
+      }
+    )
+    record('the certificate is recorded against the form', recorded.ok(), `${recorded.status()}`)
+  }
 
   const signed = await page.request.post(`${BASE}/api/beneficiaries/${recordId}/sign`, {
     failOnStatusCode: false,
@@ -192,6 +252,19 @@ try {
       'a date of birth was derived from the ID number',
       typeof body.dateOfBirth === 'string' && body.dateOfBirth.startsWith('2000-01-01'),
       String(body.dateOfBirth)
+    )
+  }
+
+  // The certificate must now belong to the participant as well, or it would sit in
+  // storage attached to a record nobody looks at again.
+  if (acceptedBody.participant?.id) {
+    await page.goto(`${BASE}/dashboard/innovators/${acceptedBody.participant.id}`, {
+      waitUntil: 'domcontentloaded',
+    })
+    const vault = await page.locator('body').innerText()
+    record(
+      'the certificate appears in the participant document vault',
+      vault.includes(`cipc-${STAMP}.pdf`) || /CIPC Registration/i.test(vault)
     )
   }
 

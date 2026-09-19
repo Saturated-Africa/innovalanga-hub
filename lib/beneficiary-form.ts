@@ -87,6 +87,31 @@ export const beneficiaryDraftSchema = z.object({
   email: z.string().trim().email().max(255),
   province: z.enum(PROVINCES).optional(),
 
+  /**
+   * The entity, where there is one.
+   *
+   * All optional. A sole proprietor has no registration number, and most people
+   * arriving on this programme are not registered at all - refusing to capture
+   * somebody for that would exclude the people it exists for.
+   *
+   * The number is checked against the entity type rather than stored blind: the
+   * last two digits of a CIPC number say what kind of entity it is, so the two
+   * fields can contradict each other and that is worth catching here.
+   */
+  entityType: z
+    .enum([
+      'PtyLtd',
+      'NPC',
+      'CloseCorporation',
+      'SoleProprietor',
+      'Trust',
+      'Cooperative',
+      'Other',
+    ])
+    .optional(),
+  entityRegistrationNumber: optionalText(40),
+  entityName: optionalText(200),
+
   // Project details
   hasInnovativeIdea: z.boolean().optional(),
   conceptDescription: optionalText(4000),
@@ -160,6 +185,9 @@ export const FIELD_LABELS: Record<string, string> = {
   hasInnovativeIdea: 'Do you have an innovative idea?',
   conceptDescription:
     'Description of proposed innovative business, social or technology concept',
+  entityType: 'Entity type',
+  entityRegistrationNumber: 'Registration number',
+  entityName: 'Registered name',
   projectTitle: 'Project title',
   developmentStage: 'Stage of development',
   sector: 'Sector that the innovation falls under',
