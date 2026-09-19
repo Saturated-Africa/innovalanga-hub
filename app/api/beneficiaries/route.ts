@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { encrypt } from '@/lib/encryption'
 import { validateSAIdNumber } from '@/lib/utils'
 import { tenantScope } from '@/lib/tenant-db'
-import { beneficiaryDraftSchema } from '@/lib/beneficiary-form'
+import { beneficiaryDraftSchema, deriveFromIdNumber } from '@/lib/beneficiary-form'
 import { isStaff } from '@/lib/beneficiary-access'
 
 /**
@@ -91,11 +91,22 @@ export async function POST(req: Request) {
   }
 
   let idNumberEncrypted: string | null = null
+  /*
+   * The date of birth, taken from the ID number here and stored on its own.
+   *
+   * This is the only point in the record's life where the plaintext ID is in
+   * hand. Deriving it later would mean decrypting - and to count youth across a
+   * cohort, decrypting every ID in it to produce one integer. Storing the date
+   * instead answers the question a funder actually asks without keeping a room
+   * full of ID numbers available to answer it.
+   */
+  let dateOfBirth: Date | null = null
   if (idNumber) {
     if (!validateSAIdNumber(idNumber)) {
       return NextResponse.json({ error: 'Invalid SA ID number' }, { status: 400 })
     }
     idNumberEncrypted = encrypt(idNumber)
+    dateOfBirth = deriveFromIdNumber(idNumber)?.dateOfBirth ?? null
   }
 
   const ownedByCaller = !isStaff(session.user.role)
@@ -107,6 +118,7 @@ export async function POST(req: Request) {
         programmeId,
         cohortId: cohortId ?? null,
         idNumberEncrypted,
+        dateOfBirth,
         userId: ownedByCaller ? session.user.id : null,
         capturedByUserId: session.user.id,
       },

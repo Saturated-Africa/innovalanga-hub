@@ -1,0 +1,18 @@
+-- Store a date of birth on a beneficiary record.
+--
+-- The M&E figures a funder is given include a youth count - people under 35 -
+-- and nothing on this platform could produce it. The age lives inside the SA ID
+-- number, which is encrypted at rest, so counting youth meant decrypting every
+-- ID in a cohort to derive one integer. That is a poor trade: it puts a room
+-- full of ID numbers in memory to answer a question a single date answers.
+--
+-- Derived once, where the plaintext ID is already in hand - at capture - and
+-- stored on its own. A date of birth is materially less sensitive than the
+-- number it came from, and it is the only thing that number was being kept for
+-- besides identity verification.
+--
+-- Nullable, and left null for every record captured before this: a beneficiary
+-- with no ID number never had a derivable age either. The tally reports how many
+-- records it could not age rather than counting them as not-youth, because a
+-- silent zero reads as "no young people on this programme".
+ALTER TABLE "BeneficiaryRecord" ADD COLUMN "dateOfBirth" DATE;

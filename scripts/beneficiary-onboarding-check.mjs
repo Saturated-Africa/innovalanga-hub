@@ -23,6 +23,33 @@ const STAFF = {
 }
 
 const STAMP = Date.now().toString().slice(-6)
+
+/**
+ * A 13 digit SA ID that passes the Luhn check, born 1 January 2000.
+ *
+ * Supplied so the capture path derives a date of birth, which is what makes the
+ * youth figure derivable at all. Computed rather than hardcoded so a typo cannot
+ * quietly make it invalid and have the record saved without an ID.
+ */
+const ID_NUMBER = (() => {
+  const stem = '000101500108'
+  for (let check = 0; check <= 9; check++) {
+    const candidate = `${stem}${check}`
+    let sum = 0
+    let alt = false
+    for (let i = candidate.length - 1; i >= 0; i--) {
+      let n = Number(candidate[i])
+      if (alt) {
+        n *= 2
+        if (n > 9) n -= 9
+      }
+      sum += n
+      alt = !alt
+    }
+    if (sum % 10 === 0) return candidate
+  }
+  throw new Error('no valid check digit for the ID fixture')
+})()
 const NAME = `Thandiwe Onboarding${STAMP} Nkosi`
 const EMAIL = `onboarding-${STAMP}@innovalanga.test`
 
@@ -73,13 +100,27 @@ try {
 
   const created = await page.request.post(`${BASE}/api/beneficiaries`, {
     failOnStatusCode: false,
+    // The form refuses a signature until it is complete, which is correct - a
+    // signature over a half-filled form evidences nothing. So this sends the
+    // whole thing.
     data: {
       fullName: NAME,
       email: EMAIL,
       cohortId,
+      idNumber: ID_NUMBER,
+      gender: 'Female',
+      hasDisability: false,
+      race: 'Black',
+      title: 'Ms',
+      physicalAddress: '12 Test Street, Giyani',
+      province: 'Limpopo',
+      localMunicipality: 'Greater Giyani',
+      districtMunicipality: 'Mopani',
       cellphone: '0821234567',
+      hasInnovativeIdea: true,
       projectTitle: `Onboarding Check ${STAMP}`,
       sector: 'Agriculture',
+      developmentStage: 'Concept',
       conceptDescription: 'A record created by the onboarding check.',
     },
   })
@@ -137,6 +178,20 @@ try {
     record(
       'the project came across as the business',
       body.includes(`Onboarding Check ${STAMP}`)
+    )
+  }
+
+  // The date of birth is what makes the youth figure derivable, so assert it was
+  // stored rather than trusting that deriving it worked.
+  const detail = await page.request.get(`${BASE}/api/beneficiaries/${recordId}`, {
+    failOnStatusCode: false,
+  })
+  if (detail.ok()) {
+    const body = await detail.json().catch(() => ({}))
+    record(
+      'a date of birth was derived from the ID number',
+      typeof body.dateOfBirth === 'string' && body.dateOfBirth.startsWith('2000-01-01'),
+      String(body.dateOfBirth)
     )
   }
 
