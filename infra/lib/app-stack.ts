@@ -383,6 +383,38 @@ export class AppStack extends Stack {
     })
 
     /*
+     * Let CloudWatch publish to this topic.
+     *
+     * Not boilerplate, and not something CDK adds for you. An SNS topic with no
+     * explicit policy relies on an implicit default that already permits the
+     * owning account's CloudWatch alarms to publish. `enforceSSL: true` attaches
+     * an explicit policy - and that policy, containing only a Deny for plaintext,
+     * replaces the implicit default entirely. CloudWatch then has no Allow.
+     *
+     * The effect was an alert path that looked complete at every layer and
+     * delivered nothing. The alarms existed, the topic existed, the subscription
+     * was confirmed, the alarm fired - and CloudWatch recorded "not authorized to
+     * perform: SNS:Publish" in its history, where nobody would look until the
+     * backup they were relying on had already been missing for weeks.
+     *
+     * So the hardening flag caused the outage it looked like it was preventing.
+     * Both are kept: plaintext stays refused, and CloudWatch is named explicitly.
+     *
+     * Scoped to alarms in this account, so the permission cannot be used by some
+     * other account's alarm pointed at this topic.
+     */
+    alarms.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudWatchAlarmsToPublish',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudwatch.amazonaws.com')],
+        actions: ['sns:Publish'],
+        resources: [alarms.topicArn],
+        conditions: { StringEquals: { 'aws:SourceAccount': this.account } },
+      })
+    )
+
+    /*
      * Who is told when an alarm fires.
      *
      * An explicit address wins; otherwise the SSM parameter is read. Neither is
