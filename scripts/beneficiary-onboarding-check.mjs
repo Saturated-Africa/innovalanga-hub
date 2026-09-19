@@ -65,6 +65,27 @@ const SIGNATURE =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP6zwAAAgUBAV' +
   'nqEpsAAAAASUVORK5CYII='
 
+/**
+ * The smallest thing that is really a PDF.
+ *
+ * A text file named .pdf would pass the extension check and fail the content type
+ * one, so the upload would prove nothing about the allowlist. Built by joining
+ * lines rather than with escape sequences, which do not survive the tooling that
+ * writes this file.
+ */
+const TINY_PDF = Buffer.from(
+  [
+    '%PDF-1.4',
+    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj',
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 99 9]>>endobj',
+    'trailer<</Root 1 0 R>>',
+    '%%EOF',
+    '',
+  ].join(String.fromCharCode(10)),
+  'latin1'
+)
+
 const results = []
 function record(step, ok, detail = '') {
   results.push({ step, ok })
@@ -261,11 +282,24 @@ try {
     await page.goto(`${BASE}/dashboard/innovators/${acceptedBody.participant.id}`, {
       waitUntil: 'domcontentloaded',
     })
-    const vault = await page.locator('body').innerText()
-    record(
-      'the certificate appears in the participant document vault',
-      vault.includes(`cipc-${STAMP}.pdf`) || /CIPC Registration/i.test(vault)
-    )
+    // The vault sits behind a Documents tab, and inactive tab content is not
+    // rendered at all - so looking for the filename on the page as loaded finds
+    // nothing no matter how long it waits. Twice now this check has failed while
+    // the database was correct; the tab has to be opened.
+    await page
+      .locator('[role=tab]')
+      .filter({ hasText: /documents/i })
+      .first()
+      .click()
+      .catch(() => {})
+
+    const appeared = await page
+      .locator(`text=cipc-${STAMP}.pdf`)
+      .first()
+      .waitFor({ timeout: 20_000 })
+      .then(() => true)
+      .catch(() => false)
+    record('the certificate appears in the participant document vault', appeared)
   }
 
   // Accepting twice must not make a second participant.
