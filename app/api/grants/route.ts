@@ -5,6 +5,7 @@ import { EntityType } from '@prisma/client'
 import { tenantScope } from '@/lib/tenant-db'
 import { innovatorInProgramme } from '@/lib/authz'
 import { canAward, toCents, tranchesReconcile } from '@/lib/funds/rules'
+import { checkRegistration, type EntityKind } from '@/lib/company-registration'
 
 /**
  * POST /api/grants
@@ -58,6 +59,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
   const input = parsed.data
+
+  /*
+   * The registration number is checked here too, by the same rule as onboarding.
+   *
+   * A grant agreement carries this number, and a funder uses it to look the entity
+   * up. It was previously free text: a digit could be dropped at award time and
+   * nothing would notice until somebody tried to find the company.
+   */
+  let registrationNumber: string | null = null
+  if (input.entityRegistrationNumber && input.entityRegistrationNumber.trim() !== '') {
+    const verdict = checkRegistration(
+      input.entityRegistrationNumber,
+      input.entityType as EntityKind
+    )
+    if (!verdict.ok) {
+      return NextResponse.json({ error: verdict.error }, { status: 400 })
+    }
+    registrationNumber = verdict.normalised ?? null
+  }
 
   const scope = await tenantScope(session)
   if (!scope) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
@@ -122,7 +142,7 @@ export async function POST(req: Request) {
       innovatorId: input.innovatorId,
       entityName: input.entityName,
       entityType: input.entityType,
-      entityRegistrationNumber: input.entityRegistrationNumber ?? null,
+      entityRegistrationNumber: registrationNumber,
       reference: input.reference ?? null,
       purpose: input.purpose,
       awardedAmount: input.awardedAmount,
