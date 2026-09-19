@@ -6,6 +6,7 @@ import * as iam from 'aws-cdk-lib/aws-iam'
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
 import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions'
 import * as sns from 'aws-cdk-lib/aws-sns'
+import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions'
 import type * as s3 from 'aws-cdk-lib/aws-s3'
 import type * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager'
@@ -30,6 +31,14 @@ export interface AppStackProps extends StackProps {
    * confirmation link that has to be clicked before anything is delivered.
    */
   alertEmail?: string
+  /**
+   * SSM parameter holding the alarm address, used when `alertEmail` is unset.
+   *
+   * Read as a CloudFormation parameter, so the value is resolved at deploy time
+   * and never enters the synthesized template, this source tree, or
+   * cdk.context.json - all three of which are public.
+   */
+  alertEmailParameter?: string
   /**
    * The machine image to run, pinned.
    *
@@ -373,11 +382,25 @@ export class AppStack extends Stack {
       enforceSSL: true,
     })
 
-    if (props.alertEmail) {
-      // AWS sends a confirmation link. Until somebody clicks it, nothing is
-      // delivered - so a topic with a subscription is not yet proof of an alert
-      // that works. Sending a test alarm is the only way to know.
-      alarms.addSubscription(new subscriptions.EmailSubscription(props.alertEmail))
+    /*
+     * Who is told when an alarm fires.
+     *
+     * An explicit address wins; otherwise the SSM parameter is read. Neither is
+     * written into this file or the template - the repository is public.
+     *
+     * AWS sends a confirmation link to the address and delivers nothing until
+     * somebody clicks it. So a subscription in the console is not yet proof of an
+     * alert that works, and neither is this code: the only proof is firing an
+     * alarm and watching it arrive.
+     */
+    const alertTarget =
+      props.alertEmail ??
+      (props.alertEmailParameter
+        ? ssm.StringParameter.valueForStringParameter(this, props.alertEmailParameter)
+        : undefined)
+
+    if (alertTarget) {
+      alarms.addSubscription(new subscriptions.EmailSubscription(alertTarget))
     }
 
     /*

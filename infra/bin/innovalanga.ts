@@ -81,12 +81,25 @@ const database: 'container' | 'rds' =
 /**
  * Where alarms are sent.
  *
- *   npx cdk deploy InnovalangaAppSandbox -c alertEmail=someone@example.com
+ * The address is NOT in this file. This repository is public, so an address
+ * committed here is an address handed to every scraper that reads GitHub. It
+ * lives in SSM Parameter Store in the account instead:
  *
- * Optional. The topic exists either way, so an alarm still has somewhere to go
- * and a history to read; without a subscription nobody is told. AWS sends a
- * confirmation link to the address and delivers nothing until it is clicked.
+ *   aws ssm put-parameter --name /innovalanga/sandbox/alertEmail  *     --type String --value someone@example.com --overwrite
+ *
+ * Read as a CloudFormation parameter rather than a synth-time lookup, which
+ * matters for the same reason: a lookup would cache the value in
+ * cdk.context.json, and that file is committed.
+ *
+ * Overridable for a one-off with `-c alertEmail=...`, though a context flag is a
+ * poor permanent home - a later deploy that forgets it would quietly remove the
+ * subscription and leave a topic nobody is listening to, which looks exactly
+ * like a working alert until a backup fails.
  */
+const alertEmailParameter =
+  app.node.tryGetContext('alertEmailParameter') ??
+  `/innovalanga/${isProd ? 'prod' : 'sandbox'}/alertEmail`
+
 const alertEmail = app.node.tryGetContext('alertEmail') as string | undefined
 
 /**
@@ -155,6 +168,7 @@ const appStack = new AppStack(app, stackName('App'), {
   environment,
   bedrockModelArnPattern,
   alertEmail,
+  alertEmailParameter,
   machineImageId,
 })
 
