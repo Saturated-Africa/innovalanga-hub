@@ -710,6 +710,14 @@ model BeneficiaryRecord {
   // ── Personal information ────────────────────────────────────────────────
   fullName          String
   idNumberEncrypted String?
+  /// Derived from the ID number when one is captured, and stored on its own.
+  ///
+  /// Without this, "youth" cannot be counted from the records at all: the age is
+  /// inside the ID number, which is encrypted, and decrypting a cohort's worth of
+  /// IDs to produce one figure is a poor trade. A date of birth is far less
+  /// sensitive than the number it came from and answers the only question the
+  /// number was being kept for.
+  dateOfBirth       DateTime?          @db.Date
   gender            BeneficiaryGender?
   hasDisability     Boolean?
   race              BeneficiaryRace?

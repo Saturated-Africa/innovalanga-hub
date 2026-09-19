@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
+import { generateTempPassword } from '@/lib/temp-password'
 import { randomBytes } from 'crypto'
 import { encrypt } from '@/lib/encryption'
 import { validateSAIdNumber } from '@/lib/utils'
@@ -34,14 +35,6 @@ const schema = z.object({
   bio: z.string().max(500).optional(),
 })
 
-/** Readable one-time password: no ambiguous characters, no dictionary words. */
-function generateTempPassword() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
-  const bytes = randomBytes(16)
-  let out = ''
-  for (let i = 0; i < 16; i++) out += alphabet[bytes[i] % alphabet.length]
-  return `${out.slice(0, 4)}-${out.slice(4, 8)}-${out.slice(8, 12)}-${out.slice(12)}`
-}
 
 export async function POST(req: Request) {
   const session = await getSession()

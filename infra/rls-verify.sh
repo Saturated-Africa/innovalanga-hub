@@ -37,13 +37,28 @@ docker compose exec -T postgres bash -c   "pg_dump -U ${OWNER} -d innovalanga | 
     echo "   COPY FAILED:"; tail -15 /tmp/rls-copy.log; exit 1; }
 echo "   copied; tables: $(owner_sql "$TEST_DB" "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")"
 
-echo "== 2. apply the migration to the copy =="
-# Piped in rather than passed with -f: psql runs inside the container and the
-# file is on the host.
-$PG psql -v ON_ERROR_STOP=1 -U "$OWNER" -d "$TEST_DB" < /tmp/rls.sql > /tmp/rls-apply.log 2>&1 || {
-  echo "   MIGRATION FAILED:"; tail -25 /tmp/rls-apply.log; exit 1; }
-echo "   policies created: $(owner_sql "$TEST_DB" "SELECT count(*) FROM pg_policies WHERE schemaname='public';")"
-echo "   tables with RLS:  $(owner_sql "$TEST_DB" "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relrowsecurity;")"
+echo "== 2. the copy carries the policies =="
+# This step used to pipe in /tmp/rls.sql, a file nothing created - staged by hand
+# the first time and never again, so every later run died here having proved
+# nothing. The whole script was unrunnable and nobody knew, which is a poor
+# property for the thing that exists to prove the policies enforce.
+#
+# Nothing needs applying. pg_dump carries policies, the ENABLE ROW LEVEL SECURITY
+# flags and the grants, so the copy made above is already the live configuration -
+# which is the thing worth testing anyway. Re-applying migrations would test the
+# migrations against a database that already has them.
+#
+# Checked rather than assumed: a copy with no policies means the dump lost them,
+# and every check below would then pass against an unprotected database and call
+# it secure.
+POLICIES=$(owner_sql "$TEST_DB" "SELECT count(*) FROM pg_policies WHERE schemaname='public';")
+RLS_TABLES=$(owner_sql "$TEST_DB" "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relrowsecurity;")
+echo "   policies present: ${POLICIES}"
+echo "   tables with RLS:  ${RLS_TABLES}"
+if [ "${POLICIES:-0}" -lt 10 ] || [ "${RLS_TABLES:-0}" -lt 10 ]; then
+  echo "   ABORTING: the copy has almost no policies, so nothing below would mean anything."
+  exit 1
+fi
 
 echo "== 3. give the role a login password, generated here =="
 APP_PW="$(openssl rand -hex 32)"
@@ -167,6 +182,49 @@ JOINED=$(app_sql "$TIA" "
   JOIN \"Cohort\" c ON c.id = i.\"cohortId\"
   JOIN \"Programme\" p ON p.id = c.\"programmeId\";" || true)
 check "join across three tables stays scoped" "$TOTAL_INNOVATORS" "$JOINED"
+
+echo
+echo "== 8c. can the tenant create a row it is allowed to own? =="
+# This exists because of a bug that took a bisection to find. An INSERT that is
+# allowed on its own is refused when it carries RETURNING, because PostgreSQL
+# applies the SELECT policy to the new row as well - the statement reads back what
+# it wrote. A USING expression that looks the row up in its own table cannot see
+# it yet, so the whole insert fails, and it fails with the WITH CHECK wording,
+# which points the reader somewhere else entirely.
+#
+# Prisma always writes RETURNING. So this shape is what the application actually
+# issues, and a policy that passes the checks above can still make every create
+# impossible. Tested here rather than trusted.
+# Each probe ends in a sentinel and is tested by grep, not by comparing psql's
+# whole output. Comparing the output was my first attempt and it failed all three
+# checks while the database behaved correctly: a multi-statement psql run prints
+# BEGIN, the row count and ROLLBACK as well, so the comparison never matched. A
+# check that fails on correct behaviour gets ignored, which is worse than not
+# having it.
+probe_insert() {
+  # $1 programme GUC, $2 label for the row, $3 extra SQL clause, $4 programme value
+  app_sql "$1" "
+    BEGIN;
+    INSERT INTO \"User\" (id, email, name, role, \"programmeId\", \"createdAt\", \"updatedAt\")
+    VALUES ('rls-verify-$2', 'rls-verify-$2@test.invalid', 'Probe', 'innovator',
+            $4, now(), now())
+    $3;
+    ROLLBACK;
+    SELECT 'PROBE_ALLOWED';" 2>/dev/null | grep -q PROBE_ALLOWED && echo allowed || echo refused
+}
+
+check "tenant may insert a user in its own programme"   "allowed" "$(probe_insert "$TIA" plain "" "app_current_programme()")"
+
+# The shape the ORM actually sends. An INSERT that is fine alone can be refused
+# when it carries RETURNING, because PostgreSQL applies the SELECT policy to the
+# new row - and a USING clause that looks the row up in its own table cannot see
+# it yet. That bug made every user creation impossible while every other check in
+# this script passed.
+check "the same insert survives RETURNING, which is what the ORM sends"   "allowed" "$(probe_insert "$TIA" returning "RETURNING id" "app_current_programme()")"
+
+# And the escalation the write check exists to stop: a tenant creating a
+# programme-less account, which would be visible to every other tenant.
+check "tenant may NOT create a platform-wide account"   "refused" "$(probe_insert "$TIA" null "" "NULL")"
 
 echo
 echo "== 9. the owner connection is unaffected, so sign-in still works =="

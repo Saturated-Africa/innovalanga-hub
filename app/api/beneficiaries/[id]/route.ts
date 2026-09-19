@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { encrypt, maskIdNumber } from '@/lib/encryption'
 import { validateSAIdNumber } from '@/lib/utils'
 import { resolveProgrammeId } from '@/lib/scope'
-import { beneficiaryDraftSchema } from '@/lib/beneficiary-form'
+import { beneficiaryDraftSchema, resolveDateOfBirth } from '@/lib/beneficiary-form'
 import {
   canRead,
   canEdit,
@@ -110,8 +110,41 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     }
   }
 
-  const data: Record<string, unknown> = { ...rest }
+  /*
+   * The date of birth is pulled out of the spread deliberately.
+   *
+   * It arrives as "YYYY-MM-DD" and the column is a date, so spreading the string
+   * into the update leaves Prisma to guess. And when an ID number is edited in
+   * the same request the two have to agree, which is a decision rather than an
+   * assignment.
+   *
+   * Resolved from what this request supplies only. The stored ID is encrypted and
+   * there is no reason to decrypt one here: if somebody is changing the date, the
+   * date they typed is the answer.
+   */
+  const { dateOfBirth: typedDob, ...fields } = rest as typeof rest & {
+    dateOfBirth?: string
+  }
+
+  const data: Record<string, unknown> = { ...fields }
   if (cohortId !== undefined) data.cohortId = cohortId ?? null
+
+  if (typedDob !== undefined || idNumber !== undefined) {
+    if (typedDob === '') {
+      data.dateOfBirth = null
+    } else {
+      const dob = resolveDateOfBirth({
+        typed: typedDob,
+        idNumber: idNumber === '' ? null : idNumber,
+      })
+      if (!dob.ok) {
+        return NextResponse.json({ error: dob.error }, { status: 400 })
+      }
+      // Only written when there is something to write, so editing an unrelated
+      // field cannot blank a date that is already on the record.
+      if (dob.dateOfBirth) data.dateOfBirth = dob.dateOfBirth
+    }
+  }
 
   if (idNumber !== undefined) {
     if (idNumber === '') {

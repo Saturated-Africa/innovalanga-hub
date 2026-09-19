@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast'
 import { Loader2, Plus, Trash2, Users } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { differences, type DerivedTally } from '@/lib/beneficiary-tally'
 
 interface BeneficiaryCount {
   id: string
@@ -30,6 +31,15 @@ interface BeneficiaryCount {
   pwd: number
   notes?: string | null
   recordedBy: string
+  /**
+   * Needed to scope the derived comparison.
+   *
+   * `include` returns the whole row, so this is already in the response - it was
+   * simply not declared here. Without it a cohort-specific reported row would be
+   * compared against every form in the programme, which is a difference this code
+   * invented rather than one worth investigating.
+   */
+  cohortId?: string | null
   cohort?: { name: string } | null
 }
 
@@ -65,10 +75,51 @@ export default function BeneficiariesPage() {
     load()
   }, [])
 
+  /**
+   * What the accepted forms say for each reported period.
+   *
+   * Shown beside the reported figures rather than replacing them. A reported row
+   * is a number somebody has already given a funder with their name against it;
+   * rewriting one from a derivation would mean disagreeing with a submitted
+   * report and nobody knowing which figure moved. Where the two differ there is
+   * usually a real story - forms captured after the report went out being the
+   * common one - and a person is the right thing to read it.
+   */
+  const [derived, setDerived] = useState<Record<string, DerivedTally>>({})
+
+  async function fetchDerived(rows: BeneficiaryCount[]) {
+    const entries = await Promise.all(
+      rows.map(async (c) => {
+        try {
+          const params = new URLSearchParams({
+            start: c.periodStart.slice(0, 10),
+            end: c.periodEnd.slice(0, 10),
+          })
+          if (c.cohortId) params.set('cohortId', c.cohortId)
+          const res = await fetch(`/api/mande/beneficiaries/derived?${params}`)
+          if (!res.ok) return null
+          return [c.id, (await res.json()) as DerivedTally] as const
+        } catch {
+          // A tally that cannot be fetched simply is not shown. It is a
+          // comparison, not the record.
+          return null
+        }
+      })
+    )
+    setDerived(Object.fromEntries(entries.filter(Boolean) as [string, DerivedTally][]))
+  }
+
   async function fetchCounts(pid: string) {
     setLoading(true)
     const res = await fetch('/api/mande/beneficiaries')
-    if (res.ok) setCounts(await res.json())
+    if (res.ok) {
+      const rows = (await res.json()) as BeneficiaryCount[]
+      setCounts(rows)
+      // Fetched after the reported rows, and not awaited by them: the comparison
+      // is useful but the reported figures are the record, and a slow tally must
+      // not hold them back.
+      void fetchDerived(rows)
+    }
     setLoading(false)
   }
 
@@ -200,6 +251,64 @@ export default function BeneficiariesPage() {
                     </div>
                   ))}
                 </div>
+                {derived[c.id] && (
+                  <div className="mt-3 border-t pt-2">
+                    <p className="text-xs font-medium">From the accepted forms</p>
+                    <div className="mt-1 grid grid-cols-5 gap-3">
+                      {[
+                        { label: 'Direct', value: derived[c.id].direct },
+                        { label: 'Indirect', value: null },
+                        { label: 'Female', value: derived[c.id].female },
+                        { label: 'Youth', value: derived[c.id].youth },
+                        { label: 'PWD', value: derived[c.id].pwd },
+                      ].map((stat) => (
+                        <div key={stat.label} className="text-center">
+                          <p className="text-sm font-semibold tabular-nums">
+                            {stat.value === null ? '—' : stat.value}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{stat.label}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Indirect is not derivable: it is a judgement about people
+                        reached without being enrolled, and no record exists to
+                        count. A dash says so; a zero would have looked like an
+                        answer. */}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Indirect reach cannot be derived from forms.
+                      {derived[c.id].ageUnknown > 0 && (
+                        <>
+                          {' '}
+                          Youth covers {derived[c.id].ageKnown} of{' '}
+                          {derived[c.id].direct} forms; {derived[c.id].ageUnknown} have no
+                          date of birth captured.
+                        </>
+                      )}
+                    </p>
+
+                    {differences(
+                      { direct: c.direct, female: c.female, youth: c.youth, pwd: c.pwd },
+                      derived[c.id]
+                    ).length > 0 && (
+                      <p className="mt-1 text-xs text-warning">
+                        Differs from what was reported:{' '}
+                        {differences(
+                          { direct: c.direct, female: c.female, youth: c.youth, pwd: c.pwd },
+                          derived[c.id]
+                        )
+                          .map(
+                            (d) =>
+                              `${d.field} ${d.delta > 0 ? '+' : ''}${d.delta}`
+                          )
+                          .join(', ')}
+                        . Worth a look rather than a correction — forms captured after a
+                        report went out produce exactly this.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {c.notes && <p className="text-xs text-muted-foreground mt-2 border-t pt-2">{c.notes}</p>}
                 <p className="text-xs text-muted-foreground mt-1">Recorded by {c.recordedBy}</p>
               </CardContent>

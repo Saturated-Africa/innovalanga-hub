@@ -57,6 +57,20 @@ export const beneficiaryDraftSchema = z.object({
     .regex(/^\d{13}$/, 'A South African ID number is 13 digits')
     .optional()
     .or(z.literal('')),
+  /**
+   * Asked for directly, as well as derived from an ID number.
+   *
+   * The ID is optional and always will be - people arrive without documents, and
+   * a form that cannot be signed is a person who cannot be enrolled - so
+   * deriving the date from it covers only some records. Asking outright is what
+   * makes a youth figure answerable for the rest.
+   */
+  dateOfBirth: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the date picker')
+    .optional()
+    .or(z.literal('')),
   gender: z.enum(GENDERS).optional(),
   hasDisability: z.boolean().optional(),
   race: z.enum(RACES).optional(),
@@ -129,6 +143,7 @@ export function missingBeforeSigning(
 export const FIELD_LABELS: Record<string, string> = {
   fullName: 'Name and Surname',
   idNumber: 'ID Number',
+  dateOfBirth: 'Date of birth',
   gender: 'Gender',
   hasDisability: 'Are you disabled?',
   race: 'Race',
@@ -210,6 +225,93 @@ export function hashAnswers(draft: Record<string, unknown>): string {
  *
  * Returns null when the number is not the expected shape.
  */
+export interface DateOfBirthResolution {
+  ok: boolean
+  /** The date to store, when ok. */
+  dateOfBirth: Date | null
+  /** Why it was refused, when not ok. */
+  error?: string
+  /** True when the value came from the ID rather than from what was typed. */
+  derived: boolean
+}
+
+/**
+ * Settle a date of birth from what was typed and what the ID number implies.
+ *
+ * A mismatch is refused rather than silently preferring one. Both are meant to be
+ * the same person's birth date, so a disagreement means one of them is mistyped -
+ * and one of them is an identity number, where a typo matters well beyond a youth
+ * count. Refusing names both dates so whoever is looking at the form can see which
+ * is wrong.
+ *
+ * With no ID, the typed date is taken as given. With no typed date, the ID
+ * supplies it. With neither, there is nothing to store and that is not an error:
+ * an unknown age is reported as unknown rather than guessed.
+ */
+export function resolveDateOfBirth(input: {
+  typed?: string | null
+  idNumber?: string | null
+  /** Today, passed in so this stays pure. */
+  today?: Date
+}): DateOfBirthResolution {
+  const today = input.today ?? new Date()
+  const typedText = (input.typed ?? '').trim()
+  const idText = (input.idNumber ?? '').trim()
+
+  let typed: Date | null = null
+  if (typedText !== '') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(typedText)) {
+      return { ok: false, dateOfBirth: null, derived: false, error: 'Use the date picker.' }
+    }
+    typed = new Date(`${typedText}T00:00:00.000Z`)
+    if (Number.isNaN(typed.getTime())) {
+      return { ok: false, dateOfBirth: null, derived: false, error: 'That is not a date.' }
+    }
+    if (typed > today) {
+      return {
+        ok: false,
+        dateOfBirth: null,
+        derived: false,
+        error: 'A date of birth cannot be in the future.',
+      }
+    }
+    // A century and a bit. Catches a mistyped year without arguing about anybody
+    // real: the oldest verified person reached 122.
+    const oldest = new Date(
+      Date.UTC(today.getUTCFullYear() - 130, today.getUTCMonth(), today.getUTCDate())
+    )
+    if (typed < oldest) {
+      return {
+        ok: false,
+        dateOfBirth: null,
+        derived: false,
+        error: 'That year looks mistyped.',
+      }
+    }
+  }
+
+  const fromId = idText === '' ? null : (deriveFromIdNumber(idText)?.dateOfBirth ?? null)
+
+  if (typed && fromId) {
+    const same = typed.toISOString().slice(0, 10) === fromId.toISOString().slice(0, 10)
+    if (!same) {
+      return {
+        ok: false,
+        dateOfBirth: null,
+        derived: false,
+        error:
+          `The ID number says ${fromId.toISOString().slice(0, 10)} and the date of birth ` +
+          `says ${typed.toISOString().slice(0, 10)}. One of them is mistyped.`,
+      }
+    }
+    return { ok: true, dateOfBirth: typed, derived: false }
+  }
+
+  if (typed) return { ok: true, dateOfBirth: typed, derived: false }
+  if (fromId) return { ok: true, dateOfBirth: fromId, derived: true }
+  return { ok: true, dateOfBirth: null, derived: false }
+}
+
 export function deriveFromIdNumber(
   idNumber: string
 ): { dateOfBirth: Date; gender: 'Male' | 'Female' } | null {

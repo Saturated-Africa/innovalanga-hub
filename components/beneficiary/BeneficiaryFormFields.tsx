@@ -3,7 +3,7 @@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { GENDERS, RACES, TITLES, PROVINCES } from '@/lib/beneficiary-form'
+import { GENDERS, RACES, TITLES, PROVINCES, deriveFromIdNumber } from '@/lib/beneficiary-form'
 
 /**
  * The Beneficiary Capturing Form, laid out as the funder issues it.
@@ -21,6 +21,7 @@ import { GENDERS, RACES, TITLES, PROVINCES } from '@/lib/beneficiary-form'
 export interface BeneficiaryValues {
   fullName: string
   idNumber: string
+  dateOfBirth: string
   gender: string
   hasDisability: string // 'yes' | 'no' | ''
   race: string
@@ -46,6 +47,7 @@ export interface BeneficiaryValues {
 export const EMPTY_BENEFICIARY: BeneficiaryValues = {
   fullName: '',
   idNumber: '',
+  dateOfBirth: '',
   gender: '',
   hasDisability: '',
   race: '',
@@ -172,11 +174,45 @@ export function BeneficiaryFormFields({
             <Input
               id="idNumber"
               value={values.idNumber}
-              onChange={set('idNumber')}
+              onChange={(e) => {
+                const idNumber = e.target.value
+                // Fill the date of birth from the ID, but only while the field is
+                // empty. Overwriting a date somebody typed would hide a mismatch
+                // that the server is about to refuse - and a mismatch is the
+                // signal that one of the two is mistyped.
+                const derived =
+                  values.dateOfBirth === ''
+                    ? deriveFromIdNumber(idNumber)?.dateOfBirth
+                    : null
+                // A patch, not the whole object: sending everything back would
+                // re-assert values the parent may have changed since this render.
+                onChange({
+                  idNumber,
+                  ...(derived
+                    ? { dateOfBirth: derived.toISOString().slice(0, 10) }
+                    : {}),
+                })
+              }}
               inputMode="numeric"
               maxLength={13}
               placeholder="13 digits"
             />
+          )}
+        </Cell>
+        <Cell label="Date of birth" htmlFor="dateOfBirth">
+          <Input
+            id="dateOfBirth"
+            type="date"
+            value={values.dateOfBirth}
+            onChange={set('dateOfBirth')}
+            disabled={readOnly}
+          />
+          {!readOnly && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Filled in from the ID number when one is entered. Asked for separately
+              because the ID is optional, and without a date of birth this person cannot
+              be counted in a youth figure.
+            </p>
           )}
         </Cell>
         <Cell label="Gender">
