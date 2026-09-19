@@ -169,6 +169,47 @@ JOINED=$(app_sql "$TIA" "
 check "join across three tables stays scoped" "$TOTAL_INNOVATORS" "$JOINED"
 
 echo
+echo "== 8c. can the tenant create a row it is allowed to own? =="
+# This exists because of a bug that took a bisection to find. An INSERT that is
+# allowed on its own is refused when it carries RETURNING, because PostgreSQL
+# applies the SELECT policy to the new row as well - the statement reads back what
+# it wrote. A USING expression that looks the row up in its own table cannot see
+# it yet, so the whole insert fails, and it fails with the WITH CHECK wording,
+# which points the reader somewhere else entirely.
+#
+# Prisma always writes RETURNING. So this shape is what the application actually
+# issues, and a policy that passes the checks above can still make every create
+# impossible. Tested here rather than trusted.
+INSERT_PLAIN=$(app_sql "$TIA" "
+  BEGIN;
+  INSERT INTO \"User\" (id, email, name, role, \"programmeId\", \"createdAt\", \"updatedAt\")
+  VALUES ('rls-verify-plain', 'rls-verify-plain@test.invalid', 'Probe', 'innovator',
+          app_current_programme(), now(), now());
+  ROLLBACK;
+  SELECT 'ok';" 2>/dev/null || echo "refused")
+check "tenant may insert a user in its own programme" "ok" "$INSERT_PLAIN"
+
+INSERT_RETURNING=$(app_sql "$TIA" "
+  BEGIN;
+  INSERT INTO \"User\" (id, email, name, role, \"programmeId\", \"createdAt\", \"updatedAt\")
+  VALUES ('rls-verify-returning', 'rls-verify-returning@test.invalid', 'Probe', 'innovator',
+          app_current_programme(), now(), now())
+  RETURNING id;
+  ROLLBACK;
+  SELECT 'ok';" 2>/dev/null || echo "refused")
+check "the same insert survives RETURNING, which is what the ORM sends" "ok" "$INSERT_RETURNING"
+
+# And the escalation the write check exists to stop.
+INSERT_NULL=$(app_sql "$TIA" "
+  BEGIN;
+  INSERT INTO \"User\" (id, email, name, role, \"programmeId\", \"createdAt\", \"updatedAt\")
+  VALUES ('rls-verify-null', 'rls-verify-null@test.invalid', 'Probe', 'innovator',
+          NULL, now(), now());
+  ROLLBACK;
+  SELECT 'allowed';" 2>/dev/null || echo "refused")
+check "tenant may NOT create a platform-wide account" "refused" "$INSERT_NULL"
+
+echo
 echo "== 9. the owner connection is unaffected, so sign-in still works =="
 OWNER_USERS=$(owner_sql "$TEST_DB" 'SELECT count(*) FROM "User";')
 check "owner still reads every account" "$(owner_sql "$TEST_DB" 'SELECT count(*) FROM "User";')" "$OWNER_USERS"
