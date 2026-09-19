@@ -6,6 +6,7 @@ import * as iam from 'aws-cdk-lib/aws-iam'
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
 import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions'
 import * as sns from 'aws-cdk-lib/aws-sns'
+import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions'
 import type * as s3 from 'aws-cdk-lib/aws-s3'
 import type * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager'
@@ -30,6 +31,14 @@ export interface AppStackProps extends StackProps {
    * confirmation link that has to be clicked before anything is delivered.
    */
   alertEmail?: string
+  /**
+   * SSM parameter holding the alarm address, used when `alertEmail` is unset.
+   *
+   * Read as a CloudFormation parameter, so the value is resolved at deploy time
+   * and never enters the synthesized template, this source tree, or
+   * cdk.context.json - all three of which are public.
+   */
+  alertEmailParameter?: string
   /**
    * The machine image to run, pinned.
    *
@@ -373,11 +382,57 @@ export class AppStack extends Stack {
       enforceSSL: true,
     })
 
-    if (props.alertEmail) {
-      // AWS sends a confirmation link. Until somebody clicks it, nothing is
-      // delivered - so a topic with a subscription is not yet proof of an alert
-      // that works. Sending a test alarm is the only way to know.
-      alarms.addSubscription(new subscriptions.EmailSubscription(props.alertEmail))
+    /*
+     * Let CloudWatch publish to this topic.
+     *
+     * Not boilerplate, and not something CDK adds for you. An SNS topic with no
+     * explicit policy relies on an implicit default that already permits the
+     * owning account's CloudWatch alarms to publish. `enforceSSL: true` attaches
+     * an explicit policy - and that policy, containing only a Deny for plaintext,
+     * replaces the implicit default entirely. CloudWatch then has no Allow.
+     *
+     * The effect was an alert path that looked complete at every layer and
+     * delivered nothing. The alarms existed, the topic existed, the subscription
+     * was confirmed, the alarm fired - and CloudWatch recorded "not authorized to
+     * perform: SNS:Publish" in its history, where nobody would look until the
+     * backup they were relying on had already been missing for weeks.
+     *
+     * So the hardening flag caused the outage it looked like it was preventing.
+     * Both are kept: plaintext stays refused, and CloudWatch is named explicitly.
+     *
+     * Scoped to alarms in this account, so the permission cannot be used by some
+     * other account's alarm pointed at this topic.
+     */
+    alarms.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudWatchAlarmsToPublish',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudwatch.amazonaws.com')],
+        actions: ['sns:Publish'],
+        resources: [alarms.topicArn],
+        conditions: { StringEquals: { 'aws:SourceAccount': this.account } },
+      })
+    )
+
+    /*
+     * Who is told when an alarm fires.
+     *
+     * An explicit address wins; otherwise the SSM parameter is read. Neither is
+     * written into this file or the template - the repository is public.
+     *
+     * AWS sends a confirmation link to the address and delivers nothing until
+     * somebody clicks it. So a subscription in the console is not yet proof of an
+     * alert that works, and neither is this code: the only proof is firing an
+     * alarm and watching it arrive.
+     */
+    const alertTarget =
+      props.alertEmail ??
+      (props.alertEmailParameter
+        ? ssm.StringParameter.valueForStringParameter(this, props.alertEmailParameter)
+        : undefined)
+
+    if (alertTarget) {
+      alarms.addSubscription(new subscriptions.EmailSubscription(alertTarget))
     }
 
     /*
