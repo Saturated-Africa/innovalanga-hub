@@ -5,6 +5,7 @@ import {
   extensionFor,
   safeDisplayName,
   buildGrantProofKey,
+  buildTrancheProofKey,
   buildFinanceProofKey,
   buildStipendProofKey,
   MAX_UPLOAD_BYTES,
@@ -24,6 +25,10 @@ import {
 /** From app/api/grants/[id]/expenditures/[expenditureId]/proof/route.ts */
 const GRANT_KEY_PATTERN =
   /^finance\/grants\/[A-Za-z0-9_-]+\/proof\/[0-9a-f-]{36}\.[a-z0-9]{2,5}$/
+
+/** From app/api/grants/[id]/tranches/[trancheId]/proof/route.ts */
+const TRANCHE_KEY_PATTERN =
+  /^finance\/tranches\/[A-Za-z0-9_-]+\/proof\/[0-9a-f-]{36}\.[a-z0-9]{2,5}$/
 
 /** From app/api/finance/proofs/route.ts */
 const FINANCE_KEY_PATTERN =
@@ -136,4 +141,36 @@ test('safeDisplayName removes what could break a Content-Disposition header', ()
 
 test('the size cap is a sane bound for a photographed receipt', () => {
   assert.equal(MAX_UPLOAD_BYTES, 20 * 1024 * 1024)
+})
+
+test('a tranche proof key matches the pattern its route validates with', () => {
+  const key = buildTrancheProofKey('cmu7atkhh000nf7lott3ohp8f', UUID, 'application/pdf')
+  assert.match(key, TRANCHE_KEY_PATTERN)
+  assert.equal(key, `finance/tranches/cmu7atkhh000nf7lott3ohp8f/proof/${UUID}.pdf`)
+})
+
+test('every allowed type produces a tranche key the route accepts', () => {
+  for (const type of ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']) {
+    assert.match(buildTrancheProofKey('t1', UUID, type), TRANCHE_KEY_PATTERN, type)
+  }
+})
+
+test('the three grant-side key namespaces cannot be confused with each other', () => {
+  // Each route accepts only its own shape. A tranche key passing the expenditure
+  // pattern would let proof of payment be recorded as proof of spending, which
+  // double counts the same document on a funder's report.
+  const tranche = buildTrancheProofKey('x', UUID, 'application/pdf')
+  const expense = buildGrantProofKey('x', UUID, 'application/pdf')
+  const project = buildFinanceProofKey('x', UUID, 'application/pdf')
+
+  assert.match(tranche, TRANCHE_KEY_PATTERN)
+  assert.doesNotMatch(tranche, GRANT_KEY_PATTERN)
+  assert.doesNotMatch(tranche, FINANCE_KEY_PATTERN)
+
+  assert.doesNotMatch(expense, TRANCHE_KEY_PATTERN)
+  assert.doesNotMatch(project, TRANCHE_KEY_PATTERN)
+})
+
+test('a tranche key still lives under the granted finance prefix', () => {
+  assert.equal(buildTrancheProofKey('t', UUID, 'image/png').startsWith('finance/'), true)
 })

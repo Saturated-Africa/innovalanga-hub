@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/hooks/use-toast'
 import { Loader2, MessageCircleQuestion, Paperclip } from 'lucide-react'
-import { uploadExpenseProof, ProofUploadError } from '@/lib/upload-expense-proof'
+import { uploadExpenseProof, ProofUploadError } from '@/lib/upload-proof'
 
 /**
  * What the participant has reported, and what came back.

@@ -15,7 +15,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
-import { Loader2, Lock, TriangleAlert } from 'lucide-react'
+import { Loader2, Lock, TriangleAlert, Paperclip, FileWarning } from 'lucide-react'
+import { uploadTrancheProof, ProofUploadError } from '@/lib/upload-proof'
 
 /**
  * The payment schedule, with the reason a payment cannot be made shown before
@@ -41,6 +42,8 @@ export interface TrancheRow {
   canPay: boolean
   blockedBecause: string[]
   warnings: string[]
+  /** Proof that this tranche was paid. Empty on a paid tranche is a gap. */
+  proofs: { id: string; filename: string; href: string }[]
 }
 
 export function TrancheSchedule({
@@ -56,10 +59,29 @@ export function TrancheSchedule({
   canAct: boolean
   canPay: boolean
 }) {
+  // Attaching proof of payment follows whoever may record the payment.
+  const canAttachProof = canPay
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
   const [payFor, setPayFor] = useState<TrancheRow | null>(null)
+  const [attaching, setAttaching] = useState<string | null>(null)
   const [withholdFor, setWithholdFor] = useState<TrancheRow | null>(null)
+
+  async function attachProof(trancheId: string, file: File) {
+    setAttaching(trancheId)
+    try {
+      await uploadTrancheProof(grantId, trancheId, file)
+      toast({ title: 'Proof of payment attached' })
+      router.refresh()
+    } catch (err) {
+      toast({
+        title: err instanceof ProofUploadError ? err.message : 'That did not attach.',
+        variant: 'destructive',
+      })
+    } finally {
+      setAttaching(null)
+    }
+  }
 
   async function act(trancheId: string, body: Record<string, unknown>) {
     setBusy(trancheId)
@@ -133,6 +155,54 @@ export function TrancheSchedule({
 
             {row.withheldReason && (
               <p className="mt-2 text-sm text-warning">Withheld: {row.withheldReason}</p>
+            )}
+
+            {row.status === 'Paid' && (
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                {row.proofs.map((proof) => (
+                  <a
+                    key={proof.id}
+                    href={proof.href}
+                    className="link-brand inline-flex items-center gap-1.5 text-xs"
+                  >
+                    <Paperclip className="h-3 w-3" aria-hidden />
+                    {proof.filename}
+                  </a>
+                ))}
+
+                {row.proofs.length === 0 && (
+                  // Money has left and nothing evidences it. A funder
+                  // reconciling disbursements asks about exactly this, so it is
+                  // stated rather than left as an absence to notice.
+                  <span className="inline-flex items-center gap-1.5 text-xs text-warning">
+                    <FileWarning className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    No proof of payment on file
+                  </span>
+                )}
+
+                {canAttachProof && (
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                    {attaching === row.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                    ) : (
+                      <Paperclip className="h-3 w-3" aria-hidden />
+                    )}
+                    {row.proofs.length === 0 ? 'Attach proof' : 'Attach another'}
+                    <input
+                      type="file"
+                      className="sr-only"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      disabled={attaching === row.id}
+                      onChange={(ev) => {
+                        const file = ev.target.files?.[0]
+                        // Cleared so the same file can be picked twice.
+                        ev.target.value = ''
+                        if (file) void attachProof(row.id, file)
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
             )}
 
             {row.status !== 'Paid' && row.status !== 'Cancelled' && row.blockedBecause.length > 0 && (

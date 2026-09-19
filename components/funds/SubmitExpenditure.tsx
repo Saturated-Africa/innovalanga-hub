@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
 import { Loader2, Plus, Paperclip } from 'lucide-react'
-import { uploadExpenseProof, ProofUploadError } from '@/lib/upload-expense-proof'
+import { uploadExpenseProof, ProofUploadError } from '@/lib/upload-proof'
 
 /**
  * Reporting what a grant was spent on.

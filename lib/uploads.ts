@@ -126,3 +126,21 @@ export function buildGrantProofKey(
 ): string {
   return `finance/grants/${expenditureId}/proof/${uuid}.${extensionFor(contentType)}`
 }
+
+/**
+ * Storage key for proof that a tranche was actually paid.
+ *
+ * The counterpart to buildGrantProofKey: that one evidences how grant money was
+ * spent, this one evidences it leaving. A funder reconciling disbursements asks
+ * for this side first, because it is their money going out.
+ *
+ * Keyed by the tranche, under the same `finance/` prefix the instance role is
+ * granted - see buildStipendProofKey for why widening that prefix is expensive.
+ */
+export function buildTrancheProofKey(
+  trancheId: string,
+  uuid: string,
+  contentType: string
+): string {
+  return `finance/tranches/${trancheId}/proof/${uuid}.${extensionFor(contentType)}`
+}
