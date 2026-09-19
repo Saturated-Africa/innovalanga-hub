@@ -5,12 +5,14 @@ import {
   missingBeforeSigning,
   hashAnswers,
   deriveFromIdNumber,
+  resolveDateOfBirth,
   ageAt,
   PROVINCES,
   RACES,
   GENDERS,
   TITLES,
 } from './beneficiary-form.ts'
+import { validateSAIdNumber } from './utils'
 
 /** A draft that is complete enough to sign. */
 function completeDraft(over: Record<string, unknown> = {}) {
@@ -124,4 +126,83 @@ test('age is computed on whole years, not rounded', () => {
   const dob = new Date(Date.UTC(1990, 5, 15))
   assert.equal(ageAt(dob, new Date(Date.UTC(2025, 5, 14))), 34, 'day before birthday')
   assert.equal(ageAt(dob, new Date(Date.UTC(2025, 5, 15))), 35, 'on birthday')
+})
+
+/* ------------------------------------------------------------------ *
+ * resolveDateOfBirth
+ *
+ * The mismatch rule is the reason this function exists. Both inputs are meant
+ * to be the same person's birth date, so a disagreement means one is mistyped -
+ * and one of them is an identity number, where a typo matters well beyond a
+ * youth count.
+ * ------------------------------------------------------------------ */
+
+/** 1 January 2000, with a valid Luhn check digit. */
+const DOB_ID = (() => {
+  for (let check = 0; check <= 9; check++) {
+    const candidate = `000101500108${check}`
+    if (validateSAIdNumber(candidate)) return candidate
+  }
+  throw new Error('no valid check digit for the fixture')
+})()
+
+const TODAY = new Date('2026-09-19T00:00:00.000Z')
+
+test('takes the typed date when there is no ID number', () => {
+  const r = resolveDateOfBirth({ typed: '1995-04-17', today: TODAY })
+  assert.equal(r.ok, true)
+  assert.equal(r.derived, false)
+  assert.equal(r.dateOfBirth?.toISOString().slice(0, 10), '1995-04-17')
+})
+
+test('derives from the ID number when nothing was typed', () => {
+  const r = resolveDateOfBirth({ idNumber: DOB_ID, today: TODAY })
+  assert.equal(r.ok, true)
+  assert.equal(r.derived, true)
+  assert.equal(r.dateOfBirth?.toISOString().slice(0, 10), '2000-01-01')
+})
+
+test('accepts both when they agree', () => {
+  const r = resolveDateOfBirth({ typed: '2000-01-01', idNumber: DOB_ID, today: TODAY })
+  assert.equal(r.ok, true)
+  assert.equal(r.dateOfBirth?.toISOString().slice(0, 10), '2000-01-01')
+})
+
+test('refuses when they disagree, naming both dates', () => {
+  const r = resolveDateOfBirth({ typed: '1995-04-17', idNumber: DOB_ID, today: TODAY })
+  assert.equal(r.ok, false)
+  assert.match(r.error ?? '', /2000-01-01/)
+  assert.match(r.error ?? '', /1995-04-17/)
+  assert.match(r.error ?? '', /mistyped/i)
+})
+
+test('neither given is not an error - an unknown age is reported as unknown', () => {
+  const r = resolveDateOfBirth({ today: TODAY })
+  assert.equal(r.ok, true)
+  assert.equal(r.dateOfBirth, null)
+})
+
+test('refuses a future date of birth', () => {
+  const r = resolveDateOfBirth({ typed: '2027-01-01', today: TODAY })
+  assert.equal(r.ok, false)
+  assert.match(r.error ?? '', /future/i)
+})
+
+test('accepts a date of birth of today, because newborns exist', () => {
+  const r = resolveDateOfBirth({ typed: '2026-09-19', today: TODAY })
+  assert.equal(r.ok, true)
+})
+
+test('refuses a year that looks mistyped without arguing about anybody real', () => {
+  // The oldest verified person reached 122; the bound is 130.
+  assert.equal(resolveDateOfBirth({ typed: '1910-01-01', today: TODAY }).ok, true)
+  assert.equal(resolveDateOfBirth({ typed: '1850-01-01', today: TODAY }).ok, false)
+})
+
+test('an unparseable ID contributes nothing rather than failing the form', () => {
+  // The ID is validated separately and reported separately. A malformed one here
+  // must not turn into a confusing date error.
+  const r = resolveDateOfBirth({ typed: '1995-04-17', idNumber: 'not-an-id', today: TODAY })
+  assert.equal(r.ok, true)
+  assert.equal(r.dateOfBirth?.toISOString().slice(0, 10), '1995-04-17')
 })

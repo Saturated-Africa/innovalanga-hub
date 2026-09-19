@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { encrypt } from '@/lib/encryption'
 import { validateSAIdNumber } from '@/lib/utils'
 import { tenantScope } from '@/lib/tenant-db'
-import { beneficiaryDraftSchema, deriveFromIdNumber } from '@/lib/beneficiary-form'
+import { beneficiaryDraftSchema, resolveDateOfBirth } from '@/lib/beneficiary-form'
 import { isStaff } from '@/lib/beneficiary-access'
 
 /**
@@ -91,30 +91,40 @@ export async function POST(req: Request) {
   }
 
   let idNumberEncrypted: string | null = null
-  /*
-   * The date of birth, taken from the ID number here and stored on its own.
-   *
-   * This is the only point in the record's life where the plaintext ID is in
-   * hand. Deriving it later would mean decrypting - and to count youth across a
-   * cohort, decrypting every ID in it to produce one integer. Storing the date
-   * instead answers the question a funder actually asks without keeping a room
-   * full of ID numbers available to answer it.
-   */
-  let dateOfBirth: Date | null = null
   if (idNumber) {
     if (!validateSAIdNumber(idNumber)) {
       return NextResponse.json({ error: 'Invalid SA ID number' }, { status: 400 })
     }
     idNumberEncrypted = encrypt(idNumber)
-    dateOfBirth = deriveFromIdNumber(idNumber)?.dateOfBirth ?? null
   }
+
+  /*
+   * The date of birth: what was typed, or what the ID number implies.
+   *
+   * Settled here because this is the only point in the record's life where the
+   * plaintext ID is in hand. Deriving it later would mean decrypting - and, to
+   * count youth across a cohort, decrypting every ID in it to produce one
+   * integer. A stored date answers the question a funder actually asks without
+   * keeping a room full of ID numbers available to answer it.
+   *
+   * A disagreement between the two is refused rather than resolved silently: one
+   * of them is mistyped, and one of them is an identity number.
+   */
+  const { dateOfBirth: typedDob, ...recordFields } = rest as typeof rest & {
+    dateOfBirth?: string
+  }
+  const dob = resolveDateOfBirth({ typed: typedDob, idNumber })
+  if (!dob.ok) {
+    return NextResponse.json({ error: dob.error }, { status: 400 })
+  }
+  const dateOfBirth = dob.dateOfBirth
 
   const ownedByCaller = !isStaff(session.user.role)
 
   try {
     const record = await prisma.beneficiaryRecord.create({
       data: {
-        ...rest,
+        ...recordFields,
         programmeId,
         cohortId: cohortId ?? null,
         idNumberEncrypted,

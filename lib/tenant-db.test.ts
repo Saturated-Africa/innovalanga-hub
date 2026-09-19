@@ -26,6 +26,8 @@ const SHARED_IMPORT = /from '@\/lib\/prisma'/
 
 /** Files that need the owning connection, with the reason. */
 const SYSTEM: Record<string, string> = {
+  'app/api/admin/backfill/beneficiary-dob/route.ts':
+    'A one-off platform maintenance job across every programme, restricted to super_admin. It derives a date of birth from an already-stored ID number and writes nothing else. A tenant connection would see one programme, which is the opposite of what a backfill needs.',
   'lib/auth.ts': 'Finds a user by email at sign-in, before any programme is known.',
   'lib/scope.ts': 'Works out which programme the caller is on. It cannot use a connection that needs the answer.',
   'lib/tenant-db.ts': 'Hands out the tenant connections. It holds the owning one by definition.',

@@ -53,6 +53,8 @@ const NO_ROLE_GATE: Record<string, string> = {
 
 /** Routes whose scope is the caller's own identity rather than a programme. */
 const SELF_SCOPED: Record<string, string> = {
+  'admin/backfill/beneficiary-dob':
+    'A platform maintenance job, restricted to super_admin, that fills a derived date across every programme. Scoping it to one programme would be wrong: it is deliberately platform-wide, it reads no row on anybody’s behalf, and it returns counts rather than records. Delete the route once every environment has been backfilled.',
   'account/password':
     'Keyed on the caller’s own user id, taken from the session. There is no id in the route, so it cannot be pointed at anybody else.',
   'innovator/me': 'Keyed on the caller’s user id.',
