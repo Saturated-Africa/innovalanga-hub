@@ -39,9 +39,21 @@ const isProd = environment === 'production'
  */
 const stackName = (base: string) => `Innovalanga${base}${isProd ? '' : 'Sandbox'}`
 
+/**
+ * The hostname this environment is actually served on.
+ *
+ * The sandbox default is hub.innovalanga.co.za because that is where the domain
+ * was pointed, not sandbox.innovalanga.co.za, which was never given a DNS
+ * record. That mismatch is not cosmetic: the documents bucket's CORS rule is
+ * built from this value, so while it said sandbox the browser origin never
+ * matched and every upload on the deployment failed its preflight - documents,
+ * finance proofs and expense receipts alike, with no error a user could act on.
+ *
+ * If a separate production environment is stood up later it needs its own
+ * address passed explicitly, because this name is taken by the sandbox today.
+ */
 const siteAddress =
-  app.node.tryGetContext('siteAddress') ??
-  (isProd ? 'hub.innovalanga.co.za' : 'sandbox.innovalanga.co.za')
+  app.node.tryGetContext('siteAddress') ?? 'hub.innovalanga.co.za'
 
 /**
  * Additional browser origins for the documents bucket.

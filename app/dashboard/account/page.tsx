@@ -4,7 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { ChangePassword } from '@/components/account/ChangePassword'
+import { YourDetails } from '@/components/account/YourDetails'
 import { systemPrisma } from '@/lib/prisma'
+import { decrypt } from '@/lib/encryption'
+import { maskIdNumber } from '@/lib/utils'
 import bcrypt from 'bcryptjs'
 
 /**
@@ -33,6 +36,57 @@ export default async function AccountPage() {
     select: { email: true, name: true, role: true, password: true, createdAt: true },
   })
   if (!user) redirect('/login')
+
+  /*
+   * A participant's own details, for the form below.
+   *
+   * Only participants have a profile to edit, so this is null for everyone else
+   * and the card is simply absent rather than empty.
+   */
+  const profile =
+    session.user.role === 'innovator'
+      ? await systemPrisma.innovatorProfile.findUnique({
+          where: { userId: session.user.id },
+          select: {
+            firstName: true,
+            lastName: true,
+            phone: true,
+            businessName: true,
+            businessSector: true,
+            bio: true,
+            idNumberEncrypted: true,
+          },
+        })
+      : null
+
+  /*
+   * The ID is masked for display, which needs the value decrypted.
+   *
+   * Wrapped, because a decrypt that throws - a rotated key, a value written by
+   * an older scheme - must not take out the page where somebody goes to change
+   * their password. Falling back to the locked state is honest: it says one is on
+   * file, which is the part that governs whether the field can be edited.
+   */
+  let idNumberMasked: string | null = null
+  if (profile?.idNumberEncrypted) {
+    try {
+      idNumberMasked = maskIdNumber(decrypt(profile.idNumberEncrypted))
+    } catch {
+      idNumberMasked = 'On file'
+    }
+  }
+
+  const details = profile
+    ? {
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        phone: profile.phone ?? '',
+        businessName: profile.businessName ?? '',
+        businessSector: profile.businessSector ?? '',
+        bio: profile.bio ?? '',
+        idNumberMasked,
+      }
+    : null
 
   /*
    * Is this account still on the password it was seeded with?
@@ -98,6 +152,17 @@ export default async function AccountPage() {
           </dl>
         </CardContent>
       </Card>
+
+      {details && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Your details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <YourDetails details={details} />
+          </CardContent>
+        </Card>
+      )}
 
       <ChangePassword
         hasPassword={Boolean(user.password)}

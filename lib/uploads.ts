@@ -106,3 +106,23 @@ export function buildStipendProofKey(
 ): string {
   return `finance/stipends/${stipendRecordId}/proof/${uuid}.${extensionFor(contentType)}`
 }
+
+/**
+ * Storage key for proof of how grant money was spent.
+ *
+ * Under the same `finance/` prefix as everything else, for the reason given
+ * above: the instance role is granted that prefix and nothing wider, and
+ * widening it means deploying the stack that holds the instance, which replaces
+ * the instance whenever AWS has published a newer image. A new prefix would buy
+ * an outage and nothing else.
+ *
+ * Keyed by the expenditure rather than the grant so that deleting one reported
+ * expense cannot orphan another's receipt.
+ */
+export function buildGrantProofKey(
+  expenditureId: string,
+  uuid: string,
+  contentType: string
+): string {
+  return `finance/grants/${expenditureId}/proof/${uuid}.${extensionFor(contentType)}`
+}

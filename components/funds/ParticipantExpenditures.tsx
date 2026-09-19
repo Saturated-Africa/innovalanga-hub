@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/hooks/use-toast'
-import { Loader2, MessageCircleQuestion } from 'lucide-react'
+import { Loader2, MessageCircleQuestion, Paperclip } from 'lucide-react'
+import { uploadExpenseProof, ProofUploadError } from '@/lib/upload-expense-proof'
 
 /**
  * What the participant has reported, and what came back.
@@ -24,6 +25,10 @@ export interface MyExpenditureRow {
   amount: string
   status: string
   reviewNote: string | null
+  /** What is already on file. Empty is the state a reviewer has to trust. */
+  proofs: { id: string; filename: string; href: string }[]
+  /** False once a reviewer has ruled on it. */
+  mayAttach: boolean
 }
 
 export function ParticipantExpenditures({
@@ -35,6 +40,24 @@ export function ParticipantExpenditures({
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
+  const [attaching, setAttaching] = useState<string | null>(null)
+
+  async function attach(id: string, file: File) {
+    setAttaching(id)
+    try {
+      await uploadExpenseProof(grantId, id, file)
+      toast({ title: 'Receipt attached' })
+      router.refresh()
+    } catch (err) {
+      toast({
+        title:
+          err instanceof ProofUploadError ? err.message : 'The receipt did not attach.',
+        variant: 'destructive',
+      })
+    } finally {
+      setAttaching(null)
+    }
+  }
 
   async function resubmit(id: string) {
     setBusy(id)
@@ -95,6 +118,46 @@ export function ParticipantExpenditures({
               </Badge>
               <span className="tabular-nums">{e.amount}</span>
             </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {e.proofs.map((proof) => (
+              <a
+                key={proof.id}
+                href={proof.href}
+                className="link-brand inline-flex items-center gap-1.5 text-xs"
+              >
+                <Paperclip className="h-3 w-3" aria-hidden />
+                {proof.filename}
+              </a>
+            ))}
+
+            {e.mayAttach && (
+              <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                {attaching === e.id ? (
+                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                ) : (
+                  <Paperclip className="h-3 w-3" aria-hidden />
+                )}
+                {e.proofs.length === 0 ? 'Attach a receipt' : 'Attach another'}
+                <input
+                  type="file"
+                  className="sr-only"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  disabled={attaching === e.id}
+                  onChange={(ev) => {
+                    const file = ev.target.files?.[0]
+                    // Cleared so picking the same file twice still fires a change.
+                    ev.target.value = ''
+                    if (file) void attach(e.id, file)
+                  }}
+                />
+              </label>
+            )}
+
+            {e.proofs.length === 0 && !e.mayAttach && (
+              <span className="text-xs text-muted-foreground">No receipt on file</span>
+            )}
           </div>
 
           {e.reviewNote && (
