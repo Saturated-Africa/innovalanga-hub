@@ -38,6 +38,43 @@ enum StipendStatus {
   Override
 }
 
+/// A document offered as evidence for one dimension's score.
+///
+/// The rubric says that if evidence is not on file it did not happen. Before this
+/// the vault and the assessment were unconnected, so that sentence was an honour
+/// system: a facilitator could score BRL 6 and nothing anywhere pointed at the tax
+/// clearance that justified it, and a funder could not check a cohort's numbers
+/// without asking somebody.
+///
+/// Links are additive. An assessment locks on submission and its scores cannot
+/// change, but evidence that arrives later - a host letter that was in somebody's
+/// email - can still be attached. There is deliberately no way to unlink: removing
+/// evidence after the fact is how a record quietly stops supporting its own score.
+model AssessmentEvidence {
+  id           String             @id @default(cuid())
+  assessmentId String
+  documentId   String
+  /// "trl" | "brl" | "mrl" | "irl".
+  ///
+  /// A string rather than an enum, matching ReadinessDimension.key, which is how
+  /// this platform already names dimensions - they are per-programme
+  /// configuration rather than a fixed set in the schema. A CHECK constraint in
+  /// the migration limits the values, so the database still refuses a typo.
+  dimension    String
+  /// What this document shows, in the assessor's words.
+  note         String?            @db.Text
+
+  linkedByUserId String?
+  createdAt      DateTime @default(now())
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  document   Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, dimension, documentId])
+  @@index([assessmentId])
+  @@index([documentId])
+}
+
 enum DocumentType {
   id_document
   /// CIPC registration certificate, for a company registered under the
@@ -440,6 +477,7 @@ model Assessment {
   updatedAt         DateTime  @updatedAt
 
   innovator InnovatorProfile @relation(fields: [innovatorId], references: [id])
+  evidence  AssessmentEvidence[]
 
   @@unique([innovatorId, period])
 }
@@ -510,8 +548,9 @@ model Document {
 
   uploadedByUserId String?
 
-  innovator         InnovatorProfile?  @relation(fields: [innovatorId], references: [id])
-  beneficiaryRecord BeneficiaryRecord? @relation(fields: [beneficiaryRecordId], references: [id], onDelete: Cascade)
+  innovator          InnovatorProfile?    @relation(fields: [innovatorId], references: [id])
+  beneficiaryRecord  BeneficiaryRecord?   @relation(fields: [beneficiaryRecordId], references: [id], onDelete: Cascade)
+  assessmentEvidence AssessmentEvidence[]
 
   @@index([innovatorId, type])
   @@index([beneficiaryRecordId])

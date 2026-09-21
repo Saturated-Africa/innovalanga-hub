@@ -30,6 +30,49 @@ const schema = z.object({
 const KEY_PATTERN =
   /^innovators\/[A-Za-z0-9_-]+\/documents\/[0-9a-f-]{36}\.[a-z0-9]{2,5}$/
 
+/**
+ * GET /api/documents?innovatorId=...
+ *
+ * A participant's documents, for choosing which ones evidence a score.
+ *
+ * The assessment form needs this: the vault is rendered server-side on the profile
+ * page, so before this there was no way for another screen to ask what a
+ * participant has on file. Without it, linking a score to its evidence would mean
+ * the assessor typing a filename from memory.
+ *
+ * Returns no storage keys. A key is what a presigned URL is built from, and this
+ * list exists to be shown in a picker - the download route is the way to reach a
+ * file, and it checks scope of its own.
+ */
+export async function GET(req: Request) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const innovatorId = new URL(req.url).searchParams.get('innovatorId')
+  if (!innovatorId) {
+    return NextResponse.json({ error: 'innovatorId is required' }, { status: 400 })
+  }
+
+  const scope = await tenantScope(session)
+  if (!scope) return NextResponse.json({ error: 'No programme found' }, { status: 404 })
+  const { programmeId, db: prisma } = scope
+
+  // The participant has to be in the caller's programme. Row-level security already
+  // confines the query, and this says so explicitly rather than relying on an empty
+  // result to mean "not yours".
+  if (!(await innovatorInProgramme(innovatorId, programmeId))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  const documents = await prisma.document.findMany({
+    where: { innovatorId },
+    select: { id: true, name: true, type: true, uploadedAt: true, sizeBytes: true },
+    orderBy: { uploadedAt: 'desc' },
+  })
+
+  return NextResponse.json(documents)
+}
+
 export async function POST(req: Request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

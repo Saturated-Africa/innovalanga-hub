@@ -16,6 +16,23 @@ const schema = z.object({
   irlJustification: z.string().optional(),
   mrlJustification: z.string().optional(),
   dropJustification: z.string().optional(),
+  /**
+   * Documents offered as evidence, per dimension.
+   *
+   * Sent with the assessment rather than attached afterwards, because the assessor
+   * is deciding the score and choosing what shows it in the same moment. A separate
+   * step would be a step that gets skipped.
+   */
+  evidence: z
+    .array(
+      z.object({
+        dimension: z.enum(['trl', 'brl', 'mrl', 'irl']),
+        documentId: z.string().min(1),
+        note: z.string().trim().max(500).optional(),
+      })
+    )
+    .max(40)
+    .optional(),
 })
 
 /**
@@ -41,7 +58,7 @@ export async function POST(req: Request) {
   }
 
   const {
-    innovatorId, period, trlScore, brlScore, irlScore, mrlScore,
+    innovatorId, period, trlScore, brlScore, irlScore, mrlScore, evidence,
     trlJustification, brlJustification, irlJustification, mrlJustification,
     dropJustification,
   } = parsed.data
@@ -99,6 +116,29 @@ export async function POST(req: Request) {
     }
   }
 
+  /*
+   * Every document offered has to belong to this participant.
+   *
+   * Row-level security confines the query to the programme, which is not the same
+   * question: without this check a facilitator could attach another participant's
+   * bank statement to this score, inside the same programme, and the evidence trail
+   * would point at the wrong person's business.
+   */
+  const offered = evidence ?? []
+  if (offered.length > 0) {
+    const ids = [...new Set(offered.map((e) => e.documentId))]
+    const theirs = await prisma.document.findMany({
+      where: { id: { in: ids }, innovatorId },
+      select: { id: true },
+    })
+    if (theirs.length !== ids.length) {
+      return NextResponse.json(
+        { error: 'One of those documents does not belong to this participant.' },
+        { status: 400 }
+      )
+    }
+  }
+
   const assessment = await prisma.assessment.create({
     data: {
       innovatorId,
@@ -114,6 +154,16 @@ export async function POST(req: Request) {
       dropJustification: dropJustification ?? null,
       assessedBy,
       lockedAt: new Date(),
+      // Written with the assessment, so a locked score and the documents behind it
+      // arrive together or not at all.
+      evidence: {
+        create: offered.map((e) => ({
+          dimension: e.dimension,
+          documentId: e.documentId,
+          note: e.note ?? null,
+          linkedByUserId: session.user.id,
+        })),
+      },
     },
   })
 
@@ -124,7 +174,14 @@ export async function POST(req: Request) {
       action: 'assessment.created',
       entityType: 'Assessment',
       entityId: assessment.id,
-      diff: { period, trlScore, brlScore, irlScore, mrlScore },
+      diff: {
+        period,
+        trlScore,
+        brlScore,
+        irlScore,
+        mrlScore,
+        evidenceLinked: offered.length,
+      },
     },
   })
 
