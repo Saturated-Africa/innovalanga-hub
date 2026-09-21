@@ -136,15 +136,25 @@ export class AppStack extends Stack {
     // than the whole bucket. Two of them, and they are kept separate because
     // they hold different things under different retention expectations:
     //
-    //   innovators/<id>/documents/<uuid>.<ext>   participant documents
-    //   finance/<projectId>/proof/<uuid>.<ext>   invoices, proof of payment,
-    //                                            bank statements
+    //   innovators/<id>/documents/<uuid>.<ext>     participant documents
+    //   finance/<projectId>/proof/<uuid>.<ext>     invoices, proof of payment,
+    //                                              bank statements
+    //   beneficiaries/<recordId>/documents/<uuid>  ID copies and CIPC
+    //                                              certificates collected at
+    //                                              onboarding
     //
     // A grant that named only the first is why financial evidence upload failed
     // with an access denial the first time it was attempted. Adding a prefix
     // here is the deliberate act it should be.
+    //
+    // The third is separate from the first on purpose. A document collected at
+    // onboarding belongs to a form that may never be accepted, so its lifecycle
+    // follows the record rather than a participant who might not come to exist -
+    // and a withdrawn form's documents stay identifiable without hunting for
+    // them under a participant that was never created.
     props.documents.grantReadWrite(role, 'innovators/*')
     props.documents.grantReadWrite(role, 'finance/*')
+    props.documents.grantReadWrite(role, 'beneficiaries/*')
     // Nightly database dumps are write only from the instance's point of view.
     props.backups.grantPut(role)
     props.appSecret.grantRead(role)

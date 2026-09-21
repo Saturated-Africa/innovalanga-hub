@@ -15,6 +15,8 @@ import {
   EMPTY_BENEFICIARY,
   type BeneficiaryValues,
 } from '@/components/beneficiary/BeneficiaryFormFields'
+import { uploadBeneficiaryDocument } from '@/lib/upload-proof'
+import type { AttachedDocument } from '@/components/beneficiary/BeneficiaryDocumentUpload'
 
 /**
  * Capturing a beneficiary, in the order the paper form is completed: the
@@ -49,6 +51,21 @@ export function CaptureClient({ cohorts }: { cohorts: { id: string; name: string
    * stored - so if this screen does not put it in front of the facilitator, the
    * participant cannot sign in and somebody has to reset it.
    */
+  /**
+   * Documents attached so far.
+   *
+   * Attaching needs a saved record, because the storage key is built from its id.
+   * On the details step there is none yet, so the field says so instead of
+   * offering a control that cannot work - and the first save is what turns it on.
+   */
+  const [documents, setDocuments] = useState<AttachedDocument[]>([])
+
+  async function attachDocument(type: string, file: File) {
+    if (!recordId) throw new Error('Save the details first, then attach the document.')
+    const doc = await uploadBeneficiaryDocument(recordId, type, file)
+    setDocuments((prev) => [...prev.filter((d) => d.type !== doc.type), doc])
+  }
+
   const [linked, setLinked] = useState<{
     participant: { id: string; name: string } | null
     temporaryPassword: string | null
@@ -281,7 +298,12 @@ export function CaptureClient({ cohorts }: { cohorts: { id: string; name: string
             </div>
           )}
 
-          <BeneficiaryFormFields values={values} onChange={patch} />
+          <BeneficiaryFormFields
+            values={values}
+            onChange={patch}
+            onUploadDocument={recordId ? attachDocument : undefined}
+            documents={documents}
+          />
 
           <Button type="submit" disabled={busy}>
             {busy ? (
