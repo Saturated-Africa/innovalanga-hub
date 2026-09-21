@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
+import { prefillValue } from '@/lib/prefill'
 
 /**
  * Awarding a grant.
@@ -56,6 +57,16 @@ export interface AwardFundOption {
 export interface AwardParticipantOption {
   id: string
   name: string
+  /**
+   * The entity captured at onboarding, where there is one.
+   *
+   * Used to fill the award form in rather than asking for it again. The
+   * registration number in particular has already been read off a certificate
+   * once, and reading it twice is how a digit goes missing on a grant agreement.
+   */
+  entityType: string | null
+  entityName: string | null
+  entityRegistrationNumber: string | null
 }
 
 const ENTITY_TYPES: { value: string; label: string }[] = [
@@ -127,6 +138,7 @@ export function AwardGrantDialog({
     setTranches((rows) => rows.map((r, i) => (i === index ? { ...r, [k]: v } : r)))
 
   const selectedFund = funds.find((f) => f.fundId === form.fundId)
+  const selectedParticipant = participants.find((p) => p.id === form.innovatorId)
 
   /**
    * The running reconciliation. Shown whenever there is an award to compare
@@ -304,7 +316,42 @@ export function AwardGrantDialog({
 
           <div className="space-y-2">
             <Label htmlFor="grant-participant">Participant</Label>
-            <Select value={form.innovatorId} onValueChange={(v) => set('innovatorId', v)}>
+            <Select
+              value={form.innovatorId}
+              onValueChange={(v) => {
+                const chosen = participants.find((p) => p.id === v)
+                /*
+                 * Filled in from the participant's record, and only into fields the
+                 * operator has not already typed into. Overwriting something
+                 * somebody typed would be the form arguing with them; leaving a
+                 * stale value from a previously selected participant would be
+                 * worse, so anything that still matches the previous prefill is
+                 * replaced.
+                 */
+                setForm((f) => {
+                  const previous = participants.find((p) => p.id === f.innovatorId)
+                  return {
+                    ...f,
+                    innovatorId: v,
+                    entityName: prefillValue(
+                      f.entityName,
+                      previous?.entityName,
+                      chosen?.entityName
+                    ),
+                    entityType: prefillValue(
+                      f.entityType,
+                      previous?.entityType,
+                      chosen?.entityType
+                    ),
+                    entityRegistrationNumber: prefillValue(
+                      f.entityRegistrationNumber,
+                      previous?.entityRegistrationNumber,
+                      chosen?.entityRegistrationNumber
+                    ),
+                  }
+                })
+              }}
+            >
               <SelectTrigger id="grant-participant">
                 <SelectValue placeholder="Choose a participant" />
               </SelectTrigger>
@@ -317,6 +364,14 @@ export function AwardGrantDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {selectedParticipant && (
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              {selectedParticipant.entityRegistrationNumber
+                ? `Entity details filled in from ${selectedParticipant.name}'s onboarding record. Change them if this grant is to a different entity.`
+                : `${selectedParticipant.name} has no registered entity on their onboarding record, so these have to be entered here.`}
+            </p>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="grant-entity-name">Entity receiving the money</Label>
