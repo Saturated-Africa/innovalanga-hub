@@ -29,6 +29,22 @@ export interface UploadedProof {
  * @param base The route that handles both verbs: POST presigns, PUT records.
  */
 export async function uploadProof(base: string, file: File): Promise<UploadedProof> {
+  return uploadViaPresign(base, file) as Promise<UploadedProof>
+}
+
+/**
+ * The three-step upload itself, for any route that presigns on POST and records
+ * on PUT.
+ *
+ * Generic over what the record step returns, because a proof returns a share
+ * token and a document returns its type - and `extra` carries whatever the route
+ * needs beyond the file, such as which kind of document this is.
+ */
+export async function uploadViaPresign(
+  base: string,
+  file: File,
+  extra: Record<string, unknown> = {}
+): Promise<unknown> {
   if (file.size === 0) {
     throw new ProofUploadError('That file is empty.')
   }
@@ -46,6 +62,7 @@ export async function uploadProof(base: string, file: File): Promise<UploadedPro
     filename: file.name,
     contentType: file.type,
     sizeBytes: file.size,
+    ...extra,
   }
 
   const presigned = await fetch(base, {
@@ -98,6 +115,17 @@ export async function uploadProof(base: string, file: File): Promise<UploadedPro
   }
 
   return recordedBody
+}
+
+/** A document collected against a beneficiary form: an ID copy, a CIPC certificate. */
+export async function uploadBeneficiaryDocument(
+  recordId: string,
+  type: string,
+  file: File
+): Promise<{ id: string; name: string; type: string }> {
+  return uploadViaPresign(`/api/beneficiaries/${recordId}/documents`, file, {
+    type,
+  }) as Promise<{ id: string; name: string; type: string }>
 }
 
 /** Evidence of what a participant spent grant money on. */

@@ -32,6 +32,9 @@ export default async function MyBeneficiaryFormPage() {
     ? {
         fullName: record.fullName,
         idNumber: '',
+        entityType: record.entityType ?? '',
+        entityRegistrationNumber: record.entityRegistrationNumber ?? '',
+        entityName: record.entityName ?? '',
         // The stored date, unlike the ID number, which is never sent back.
         dateOfBirth: record.dateOfBirth
           ? record.dateOfBirth.toISOString().slice(0, 10)

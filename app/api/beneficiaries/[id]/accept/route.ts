@@ -172,6 +172,20 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       select: { id: true, firstName: true, lastName: true },
     })
 
+    /*
+     * Documents collected against the form now belong to the participant too.
+     *
+     * The beneficiary link is kept rather than moved: it is the provenance - this
+     * ID copy was handed over at onboarding, against this form - and the added
+     * innovatorId is what makes it appear in the participant's vault. Without this
+     * step the certificate would sit in storage, attached to a record nobody looks
+     * at again, and a facilitator would ask for it a second time.
+     */
+    await tx.document.updateMany({
+      where: { beneficiaryRecordId: record.id, innovatorId: null },
+      data: { innovatorId: profile.id },
+    })
+
     await tx.beneficiaryRecord.update({
       where: { id: record.id },
       data: {

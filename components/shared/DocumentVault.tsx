@@ -12,6 +12,7 @@ import { DocumentType } from '@prisma/client'
 
 const DOC_TYPE_LABELS: Record<DocumentType, string> = {
   id_document: 'ID Document',
+  cipc_registration: 'CIPC Registration Certificate',
   proof_of_address: 'Proof of Address',
   business_plan: 'Business Plan',
   pitch_deck: 'Pitch Deck',

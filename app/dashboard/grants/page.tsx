@@ -42,7 +42,28 @@ export default async function GrantsPage() {
     // last one that should be handed names it did not ask for.
     canAward
       ? prisma.innovatorProfile.findMany({
-          select: { id: true, firstName: true, lastName: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            businessName: true,
+            /*
+             * The entity captured at onboarding, so the award form does not ask
+             * for it again.
+             *
+             * A facilitator awarding a grant was retyping a registration number
+             * off a certificate the programme already holds, which is a
+             * transcription error waiting to reach a grant agreement and a
+             * funder's report.
+             */
+            beneficiaryRecord: {
+              select: {
+                entityType: true,
+                entityName: true,
+                entityRegistrationNumber: true,
+              },
+            },
+          },
           orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
         })
       : Promise.resolve([]),
@@ -67,6 +88,12 @@ export default async function GrantsPage() {
               participants={participants.map((p) => ({
                 id: p.id,
                 name: `${p.firstName} ${p.lastName}`,
+                entityType: p.beneficiaryRecord?.entityType ?? null,
+                // The registered name is preferred over the trading name: a grant
+                // agreement names the legal entity.
+                entityName: p.beneficiaryRecord?.entityName ?? p.businessName ?? null,
+                entityRegistrationNumber:
+                  p.beneficiaryRecord?.entityRegistrationNumber ?? null,
               }))}
             />
           ) : undefined

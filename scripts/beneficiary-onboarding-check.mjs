@@ -65,6 +65,27 @@ const SIGNATURE =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP6zwAAAgUBAV' +
   'nqEpsAAAAASUVORK5CYII='
 
+/**
+ * The smallest thing that is really a PDF.
+ *
+ * A text file named .pdf would pass the extension check and fail the content type
+ * one, so the upload would prove nothing about the allowlist. Built by joining
+ * lines rather than with escape sequences, which do not survive the tooling that
+ * writes this file.
+ */
+const TINY_PDF = Buffer.from(
+  [
+    '%PDF-1.4',
+    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj',
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 99 9]>>endobj',
+    'trailer<</Root 1 0 R>>',
+    '%%EOF',
+    '',
+  ].join(String.fromCharCode(10)),
+  'latin1'
+)
+
 const results = []
 function record(step, ok, detail = '') {
   results.push({ step, ok })
@@ -117,6 +138,11 @@ try {
       localMunicipality: 'Greater Giyani',
       districtMunicipality: 'Mopani',
       cellphone: '0821234567',
+      entityType: 'PtyLtd',
+      entityName: `Onboarding Check Enterprises ${STAMP}`,
+      // Ends /07, which is what a private company's number ends in. The server
+      // checks the suffix against the type, so this pair has to agree.
+      entityRegistrationNumber: '2016/123456/07',
       hasInnovativeIdea: true,
       projectTitle: `Onboarding Check ${STAMP}`,
       sector: 'Agriculture',
@@ -128,6 +154,61 @@ try {
   record('a beneficiary record is created', created.ok(), `${created.status()}`)
   if (!created.ok()) throw new Error(JSON.stringify(createdBody).slice(0, 300))
   const recordId = createdBody.id
+
+  // A number whose suffix contradicts the entity type must be refused. /08 is a
+  // non-profit company, so it cannot belong to a (Pty) Ltd.
+  const mismatched = await page.request.patch(`${BASE}/api/beneficiaries/${recordId}`, {
+    failOnStatusCode: false,
+    data: { entityType: 'PtyLtd', entityRegistrationNumber: '2016/123456/08' },
+  })
+  const mismatchBody = await mismatched.text()
+  record(
+    'a registration number that contradicts the entity type is refused',
+    !mismatched.ok() && /non-profit|one of the two/i.test(mismatchBody),
+    `${mismatched.status()}`
+  )
+
+  // The CIPC certificate: presign, PUT to storage, then record it.
+  const presigned = await page.request.post(
+    `${BASE}/api/beneficiaries/${recordId}/documents`,
+    {
+      failOnStatusCode: false,
+      data: {
+        filename: `cipc-${STAMP}.pdf`,
+        contentType: 'application/pdf',
+        sizeBytes: TINY_PDF.length,
+        type: 'cipc_registration',
+      },
+    }
+  )
+  const presignedBody = await presigned.json().catch(() => ({}))
+  record('a certificate upload can be started', presigned.ok(), `${presigned.status()}`)
+
+  if (presigned.ok()) {
+    const put = await page.request.put(presignedBody.url, {
+      failOnStatusCode: false,
+      headers: { 'Content-Type': 'application/pdf' },
+      data: TINY_PDF,
+    })
+    // This is the step that fails when the storage prefix is not granted to the
+    // instance, which is a configuration problem rather than a code one.
+    record('storage accepts the certificate', put.ok(), `${put.status()}`)
+
+    const recorded = await page.request.put(
+      `${BASE}/api/beneficiaries/${recordId}/documents`,
+      {
+        failOnStatusCode: false,
+        data: {
+          filename: `cipc-${STAMP}.pdf`,
+          contentType: 'application/pdf',
+          sizeBytes: TINY_PDF.length,
+          type: 'cipc_registration',
+          s3Key: presignedBody.s3Key,
+        },
+      }
+    )
+    record('the certificate is recorded against the form', recorded.ok(), `${recorded.status()}`)
+  }
 
   const signed = await page.request.post(`${BASE}/api/beneficiaries/${recordId}/sign`, {
     failOnStatusCode: false,
@@ -193,6 +274,32 @@ try {
       typeof body.dateOfBirth === 'string' && body.dateOfBirth.startsWith('2000-01-01'),
       String(body.dateOfBirth)
     )
+  }
+
+  // The certificate must now belong to the participant as well, or it would sit in
+  // storage attached to a record nobody looks at again.
+  if (acceptedBody.participant?.id) {
+    await page.goto(`${BASE}/dashboard/innovators/${acceptedBody.participant.id}`, {
+      waitUntil: 'domcontentloaded',
+    })
+    // The vault sits behind a Documents tab, and inactive tab content is not
+    // rendered at all - so looking for the filename on the page as loaded finds
+    // nothing no matter how long it waits. Twice now this check has failed while
+    // the database was correct; the tab has to be opened.
+    await page
+      .locator('[role=tab]')
+      .filter({ hasText: /documents/i })
+      .first()
+      .click()
+      .catch(() => {})
+
+    const appeared = await page
+      .locator(`text=cipc-${STAMP}.pdf`)
+      .first()
+      .waitFor({ timeout: 20_000 })
+      .then(() => true)
+      .catch(() => false)
+    record('the certificate appears in the participant document vault', appeared)
   }
 
   // Accepting twice must not make a second participant.
